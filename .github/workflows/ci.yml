@@ -1,0 +1,23 @@
+# Every push and pull request: analyze and test, the two checks a change
+# must pass before it is finished.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

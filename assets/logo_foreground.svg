@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Android adaptive-icon FOREGROUND for assets/logo.svg.
+
+       Same art, no background, scaled 0.74 about the centre. Android composites
+       a 108dp foreground over a 108dp background and then masks it: only the
+       middle 72dp is reliably visible and only the middle 66dp (61 %) is
+       guaranteed on every launcher shape. At 1.0 the trace runs to the edge and
+       every circular mask would cut its ends off, so the whole mark is shrunk
+       rather than the trace shortened — the crown and the trace have to keep
+       their proportions to each other.
+
+       The band across the crown's foot is cut in the SAME ink as
+       adaptive_icon_background in pubspec.yaml, which is what the launcher
+       composites behind this layer — so the cut reads as a gap, exactly as it
+       does in assets/logo.svg. Keep this in step with that file. -->
+
+  <g transform="translate(256 256) scale(0.74) translate(-256 -256)">
+    <g transform="translate(256 46) scale(2.55) translate(-50 0)">
+      <g fill="#F7F1E3">
+        <path d="M45 0 h10 v8 h9 v10 h-9 v9 h-10 v-9 h-9 v-10 h9 z"/>
+        <path d="M50 20 C60 33 65 48 65 64 H35 C35 48 40 33 50 20 Z"/>
+        <circle cx="25" cy="62" r="23"/>
+        <circle cx="75" cy="62" r="23"/>
+        <path d="M14 62 H86 L88 84 C88 94 74 99 50 99 C26 99 12 94 12 84 Z"/>
+      </g>
+      <rect x="-4" y="72" width="108" height="9" fill="#14152A"/>
+    </g>
+
+    <path d="M40 400 H150 L188 336 L228 464 L266 400 H472"
+          fill="none" stroke="#EFBA4E" stroke-width="34"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -1,0 +1,989 @@
+{
+ "version": 1,
+ "frames": {
+  "does": "What the played move itself does, visible on the board right after it.",
+  "threatens": "What the played move sets up for the mover's NEXT move, if the opponent does nothing about it.",
+  "allows": "What the played move lets the opponent do: read from the engine's reply line.",
+  "better": "What the engine's better move would have done: read from the engine's line from the position before the move. Only for moves that were not the engine's."
+ },
+ "objects": {
+  "piece": "a role (pawn, knight, bishop, rook, queen, king) and its square, e.g. \"knight c3\"",
+  "side": "kingside | queenside",
+  "none": "the concept names no object"
+ },
+ "concepts": [
+  {
+   "id": "checkmate",
+   "family": "mate",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "none",
+   "definition": "The move mates, lets the opponent force mate, or the better move forced mate.",
+   "sentence": "Checkmate.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart readLine (Motif.mate)"
+   }
+  },
+  {
+   "id": "back_rank_mate",
+   "family": "mate",
+   "frames": [
+    "does",
+    "allows",
+    "better",
+    "threatens"
+   ],
+   "object": "none",
+   "definition": "A mate delivered on the king's own back rank, blocked in by its own pawns.",
+   "sentence": "That mates on the back rank.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _backRankMate"
+   }
+  },
+  {
+   "id": "mate_threat",
+   "family": "mate",
+   "frames": [
+    "threatens",
+    "allows"
+   ],
+   "object": "none",
+   "definition": "The mover threatens mate next move (threatens), or the move lets the opponent threaten a mate that must be answered (allows).",
+   "sentence": "That threatens mate.",
+   "detector": {
+    "status": "partial",
+    "where": "eval mateIn only; no null-move threat check"
+   }
+  },
+  {
+   "id": "check",
+   "family": "king",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "A check with no bigger point that another concept covers.",
+   "sentence": "A check, forcing the king to respond.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart _gameState"
+   }
+  },
+  {
+   "id": "hanging_piece",
+   "family": "material",
+   "frames": [
+    "allows"
+   ],
+   "object": "piece",
+   "definition": "The move leaves one of the mover's own pieces or pawns en prise: it can be taken for free or for less than it is worth.",
+   "sentence": "That leaves the {piece} hanging.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _hangingPiece; move_facts.dart _safetyOfMovedPiece/_leftLoose"
+   }
+  },
+  {
+   "id": "capture_free",
+   "family": "material",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Takes an enemy piece or pawn that was undefended or not defended enough, winning it outright.",
+   "sentence": "That captures a free {piece}.",
+   "detector": {
+    "status": "partial",
+    "where": "exchange.dart staticExchange > 0 on the captured square"
+   }
+  },
+  {
+   "id": "win_material",
+   "family": "material",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A sequence of trades that ends with material won; no named tactic is the reason.",
+   "sentence": "That wins material once the trades are over.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart readLine (won/gave, evalSlack)"
+   }
+  },
+  {
+   "id": "capture",
+   "family": "material",
+   "frames": [
+    "does"
+   ],
+   "object": "piece",
+   "definition": "A plain capture that starts an exchange, when nothing more specific applies.",
+   "sentence": "That captures the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart _capture"
+   }
+  },
+  {
+   "id": "recapture",
+   "family": "material",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Takes back material the opponent just captured.",
+   "sentence": "A recapture.",
+   "detector": {
+    "status": "existing",
+    "where": "classification.dart _isRecapture"
+   }
+  },
+  {
+   "id": "even_trade",
+   "family": "material",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Offers or starts an even exchange of like pieces.",
+   "sentence": "That trades {piece}s.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart startsEvenTrade"
+   }
+  },
+  {
+   "id": "trade_when_ahead",
+   "family": "material",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Trades pieces while ahead in material, heading for a simpler won ending.",
+   "sentence": "Trading pieces when ahead is the way to convert.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "sacrifice",
+   "family": "material",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Gives up material on purpose for an attack or a larger gain.",
+   "sentence": "That sacrifices the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "exchange.dart offeredPieces / sacrificeHolds"
+   }
+  },
+  {
+   "id": "gambit",
+   "family": "opening",
+   "frames": [
+    "does"
+   ],
+   "object": "piece",
+   "definition": "An opening pawn offer for development or central control.",
+   "sentence": "That offers a pawn for the centre.",
+   "detector": {
+    "status": "none",
+    "where": "opening book knows names only"
+   }
+  },
+  {
+   "id": "fork",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better",
+    "threatens"
+   ],
+   "object": "piece",
+   "definition": "One piece attacks two or more enemy targets at once so one of them is lost.",
+   "sentence": "That forks the {piece} and another piece.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _fork"
+   }
+  },
+  {
+   "id": "pin",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A piece cannot move (or should not) because a more valuable piece or the king stands behind it on the line.",
+   "sentence": "That pins the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart _pins; move_tags.dart _pinPreventsAttack/_pinPreventsEscape"
+   }
+  },
+  {
+   "id": "exploit_pin",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Wins material because the piece that should defend (or recapture) is pinned.",
+   "sentence": "That wins the {piece} because its defender is pinned.",
+   "detector": {
+    "status": "partial",
+    "where": "move_tags.dart _pinPreventsAttack"
+   }
+  },
+  {
+   "id": "skewer",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Attacks a valuable piece that must move, exposing a piece behind it on the same line.",
+   "sentence": "That skewers the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _skewer"
+   }
+  },
+  {
+   "id": "discovered_attack",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Moving one piece opens a line for another piece behind it, which now attacks a target.",
+   "sentence": "That uncovers an attack on the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _discoveredAttack; move_facts.dart _uncovered"
+   }
+  },
+  {
+   "id": "discovered_check",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "none",
+   "definition": "A discovered attack whose target is the king.",
+   "sentence": "A discovered check.",
+   "detector": {
+    "status": "partial",
+    "where": "move_facts.dart _gameState + _uncovered"
+   }
+  },
+  {
+   "id": "trapped_piece",
+   "family": "tactic",
+   "frames": [
+    "allows",
+    "threatens",
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A piece has no safe square to go to, so it can be won.",
+   "sentence": "The {piece} is trapped.",
+   "detector": {
+    "status": "existing",
+    "where": "move_tags.dart _isTrapped / _trappedPiece (only inside a paying line)"
+   }
+  },
+  {
+   "id": "attack_trapped_piece",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "threatens",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Attacks a piece that has no safe square to escape to.",
+   "sentence": "That attacks the trapped {piece}.",
+   "detector": {
+    "status": "partial",
+    "where": "move_tags.dart _isTrapped exists; not tied to the attacking move"
+   }
+  },
+  {
+   "id": "remove_defender",
+   "family": "tactic",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Captures or deflects the piece that was defending a target, so the target falls.",
+   "sentence": "That removes the defender of the {piece}.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "pile_on",
+   "family": "tactic",
+   "frames": [
+    "does"
+   ],
+   "object": "piece",
+   "definition": "Adds another attacker to an enemy piece or pawn that is already attacked.",
+   "sentence": "That adds another attacker on the {piece}.",
+   "detector": {
+    "status": "none",
+    "where": "counts exist in move_facts.dart _safetyOfMovedPiece"
+   }
+  },
+  {
+   "id": "attack_piece",
+   "family": "tempo",
+   "frames": [
+    "does",
+    "threatens"
+   ],
+   "object": "piece",
+   "definition": "Attacks an enemy piece that is not adequately defended, threatening to win it.",
+   "sentence": "That attacks the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart _threats"
+   }
+  },
+  {
+   "id": "pawn_kick",
+   "family": "tempo",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A pawn attacks an enemy piece, which has to move.",
+   "sentence": "The pawn attacks the {piece}, which has to move.",
+   "detector": {
+    "status": "partial",
+    "where": "move_facts.dart _threats (not specific to pawns)"
+   }
+  },
+  {
+   "id": "gain_tempo",
+   "family": "tempo",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A developing or improving move that also attacks something, so the opponent loses time answering it.",
+   "sentence": "That gains a tempo on the {piece}.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "escape_attack",
+   "family": "defence",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Moves an attacked piece to a safe square.",
+   "sentence": "That moves the {piece} to safety.",
+   "detector": {
+    "status": "partial",
+    "where": "classification.dart _isRetreat"
+   }
+  },
+  {
+   "id": "defend_hanging",
+   "family": "defence",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Defends a piece or pawn that was hanging.",
+   "sentence": "That defends the hanging {piece}.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "remove_attacker",
+   "family": "defence",
+   "frames": [
+    "does"
+   ],
+   "object": "piece",
+   "definition": "Captures, blocks or drives off the piece that was attacking one of the mover's pieces.",
+   "sentence": "That attacker is gone; the {piece} is safe.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "defend_threat",
+   "family": "defence",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "none",
+   "definition": "Parries a concrete threat (mate, fork, winning material) the opponent had.",
+   "sentence": "That stops the threat.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "ignored_threat",
+   "family": "defence",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A piece already en prise is left there. ALLOWS when that is the mistake; DOES / BETTER when it is the engine's own move and the threat is ignored on purpose (\"Ignoring the threat on the queen, a difficult move to see\").",
+   "sentence": "That ignores the threat to the {piece}.",
+   "detector": {
+    "status": "existing",
+    "where": "board_concepts.dart _safety; detect_concepts.dart _playsOn"
+   }
+  },
+  {
+   "id": "castle",
+   "family": "king",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "side",
+   "definition": "Castles, tucking the king away and connecting the rooks.",
+   "sentence": "Castling {side}, for king safety.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart castlingSide"
+   }
+  },
+  {
+   "id": "enable_castling",
+   "family": "king",
+   "frames": [
+    "does"
+   ],
+   "object": "side",
+   "definition": "Clears the last piece between king and rook so castling becomes possible.",
+   "sentence": "That clears the way to castle {side}.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "luft",
+   "family": "king",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "A pawn move in front of the castled king that gives it an escape square against back-rank mates.",
+   "sentence": "That gives the king some air.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "king_exposed",
+   "family": "king",
+   "frames": [
+    "allows"
+   ],
+   "object": "none",
+   "definition": "Weakens the pawns or pieces sheltering the mover's own king, or gives up castling, and the engine line attacks it.",
+   "sentence": "That weakens the king.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "king_activity",
+   "family": "king",
+   "frames": [
+    "does",
+    "better",
+    "allows"
+   ],
+   "object": "none",
+   "definition": "Brings the king toward the centre or the action in an endgame.",
+   "sentence": "In the endgame the king is a fighting piece.",
+   "detector": {
+    "status": "none",
+    "where": "game_phase.dart knows the endgame"
+   }
+  },
+  {
+   "id": "develop_piece",
+   "family": "activity",
+   "frames": [
+    "does",
+    "better",
+    "allows"
+   ],
+   "object": "piece",
+   "definition": "Moves a knight or bishop off its starting square in the opening.",
+   "sentence": "That develops the {piece}.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "central_control",
+   "family": "activity",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Occupies or supports the central squares (d4, d5, e4, e5).",
+   "sentence": "That fights for the centre.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "active_square",
+   "family": "activity",
+   "frames": [
+    "does",
+    "better",
+    "allows"
+   ],
+   "object": "piece",
+   "definition": "Moves a piece to a square where it controls clearly more (mobility gain) without a tactical point.",
+   "sentence": "That puts the {piece} on a more active square.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "rook_open_file",
+   "family": "activity",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Puts a rook on an open or half-open file.",
+   "sentence": "That puts the rook on the open file.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "rook_seventh",
+   "family": "activity",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Puts a rook on the opponent's second rank (the seventh from the mover).",
+   "sentence": "A rook on the seventh rank.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "outpost",
+   "family": "activity",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A knight (or bishop) lands on a square in enemy territory that no enemy pawn can ever attack, supported by a pawn.",
+   "sentence": "The {piece} sits on an outpost.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "passive_piece",
+   "family": "activity",
+   "frames": [
+    "allows"
+   ],
+   "object": "piece",
+   "definition": "Retreats or places a piece where it does little, and the engine's better move was active.",
+   "sentence": "That leaves the {piece} passive.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "doubled_pawns",
+   "family": "structure",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Forces (does/better) or lets the opponent force (allows) two pawns of one side onto the same file.",
+   "sentence": "That leaves doubled pawns.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "isolated_pawn",
+   "family": "structure",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Creates a pawn with no friendly pawn on either neighbouring file.",
+   "sentence": "That leaves an isolated pawn.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "passed_pawn",
+   "family": "structure",
+   "frames": [
+    "does",
+    "better",
+    "allows"
+   ],
+   "object": "piece",
+   "definition": "Creates, pushes or supports a pawn no enemy pawn can stop on its way to promotion.",
+   "sentence": "That creates a passed pawn.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "pawn_chain_attack",
+   "family": "structure",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "A pawn strikes at the enemy's pawn chain (usually its base or a lever), to open lines.",
+   "sentence": "That attacks the pawn chain.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "promotion",
+   "family": "structure",
+   "frames": [
+    "does",
+    "allows",
+    "better",
+    "threatens"
+   ],
+   "object": "piece",
+   "definition": "Promotes a pawn, or the line forces one.",
+   "sentence": "The pawn promotes.",
+   "detector": {
+    "status": "existing",
+    "where": "move_facts.dart _promotionTarget"
+   }
+  },
+  {
+   "id": "opening_name",
+   "family": "meta",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "A book move; the opening's name is the comment.",
+   "sentence": "{opening}.",
+   "detector": {
+    "status": "existing",
+    "where": "opening_book.dart / GameNode.openingName"
+   }
+  },
+  {
+   "id": "only_move",
+   "family": "meta",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "The only move that keeps the position (Great).",
+   "sentence": "The only move that holds.",
+   "detector": {
+    "status": "existing",
+    "where": "classification.dart onlyMoveGap"
+   }
+  },
+  {
+   "id": "missed_win",
+   "family": "meta",
+   "frames": [
+    "better"
+   ],
+   "object": "none",
+   "definition": "The opponent had just blundered and this move lets the win go (Miss).",
+   "sentence": "That lets the opponent's mistake go.",
+   "detector": {
+    "status": "existing",
+    "where": "classification.dart Miss"
+   }
+  },
+  {
+   "id": "generic_quality",
+   "family": "meta",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "none",
+   "definition": "No concrete concept: the line only praises or criticises the move, or states the swing (\"your advantage is gone\").",
+   "sentence": "A strong move.",
+   "detector": {
+    "status": "existing",
+    "where": "the verdict itself"
+   }
+  },
+  {
+   "id": "escape_check",
+   "family": "king",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "The king steps out of check (to a square where it is safe), when that is the whole point of the move.",
+   "sentence": "The king steps out of check.",
+   "detector": {
+    "status": "partial",
+    "where": "the position before is in check (dartchess isCheck)"
+   }
+  },
+  {
+   "id": "opposition",
+   "family": "king",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "none",
+   "definition": "In a king-and-pawn ending, the king takes the opposition: it faces the enemy king with one square between them and the other side to move.",
+   "sentence": "The king takes the opposition.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "stop_passed_pawn",
+   "family": "structure",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Stops an enemy passed pawn: blockades the square in front of it, controls its path, or captures it.",
+   "sentence": "That stops the passed pawn.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "backward_pawn",
+   "family": "structure",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Leaves (allows) or creates (does/better) a pawn that has fallen behind its neighbours and can no longer be defended by a pawn.",
+   "sentence": "That leaves a backward pawn.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "pawn_chain_create",
+   "family": "structure",
+   "frames": [
+    "does",
+    "better"
+   ],
+   "object": "piece",
+   "definition": "Builds a diagonal chain of pawns that defend each other.",
+   "sentence": "That builds a pawn chain.",
+   "detector": {
+    "status": "none",
+    "where": ""
+   }
+  },
+  {
+   "id": "forced_move",
+   "family": "meta",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "The only legal move.",
+   "sentence": "The only legal move.",
+   "detector": {
+    "status": "existing",
+    "where": "one legal move (dartchess legalMoves)"
+   }
+  },
+  {
+   "id": "mating_net",
+   "family": "mate",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "A move inside a forced mate sequence that keeps the mate on track, short of the mate itself.",
+   "sentence": "Keeping the mating attack on track.",
+   "detector": {
+    "status": "partial",
+    "where": "eval mateIn on both sides of the move"
+   }
+  },
+  {
+   "id": "perpetual_check",
+   "family": "king",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "none",
+   "definition": "Checks the king again and again, so the game is drawn: the move starts a perpetual or keeps one going (does), lets the opponent force one (allows), or the better move forced one (better). The engine scores the position a draw and its line is checks only.",
+   "sentence": "That forces a draw by perpetual check.",
+   "detector": {
+    "status": "existing",
+    "where": "detect_concepts.dart _perpetual (classification.dart isPerpetualLine)"
+   }
+  },
+  {
+   "id": "double_rooks",
+   "family": "activity",
+   "frames": [
+    "does"
+   ],
+   "object": "piece",
+   "definition": "Lines up a second rook (or a queen and a rook) on an open or half-open file, or clears the square so the next move in the engine line does.",
+   "sentence": "That doubles the rooks on the {file}.",
+   "detector": {
+    "status": "existing",
+    "where": "board_concepts.dart _doubleRooks; detect_concepts.dart (prepares, from the reply line)"
+   }
+  },
+  {
+   "id": "stalemate",
+   "family": "draw",
+   "frames": [
+    "does",
+    "allows",
+    "better"
+   ],
+   "object": "none",
+   "definition": "The move leaves the opponent with no legal move and not in check: the game is drawn (does). The reply line ends in a stalemate the opponent forces (allows), or the better line forced one (better).",
+   "sentence": "Stalemate: the game is drawn.",
+   "detector": {
+    "status": "existing",
+    "where": "dartchess isStalemate, on the board after the move and at the end of a line"
+   }
+  },
+  {
+   "id": "repetition",
+   "family": "draw",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "The move brings about the same position (pieces, side to move, castling, en passant) for the third time or more in the game: a draw by repetition.",
+   "sentence": "That repeats the position for the third time: a draw by repetition.",
+   "detector": {
+    "status": "existing",
+    "where": "the game's positions before the move, keyed by FEN without counters"
+   }
+  },
+  {
+   "id": "insufficient_material",
+   "family": "draw",
+   "frames": [
+    "does"
+   ],
+   "object": "none",
+   "definition": "The move leaves neither side enough material to mate (it was not so before): the game is drawn.",
+   "sentence": "That leaves too little material to mate: the game is drawn.",
+   "detector": {
+    "status": "existing",
+    "where": "dartchess isInsufficientMaterial"
+   }
+  }
+ ]
+}

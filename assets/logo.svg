@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Chess Mortem logo — "Flatline": a king, and under it the trace of the
+       game it did not survive. One spike, then nothing.
+
+       FULL BLEED AND SQUARE ON PURPOSE. Every launcher masks the icon to its
+       own shape (circle, squircle, rounded square), so rounding it here only
+       fights that mask and leaves transparent corners iOS has to fill. The
+       app bar rounds it itself with a ClipRRect.
+
+       Nothing overlaps: the crown sits entirely above the trace, clearing the
+       spike by ~40 px. That is the whole reason this mark survives 20 px.
+
+       The king is the THREE-LOBED CROWN the board already draws (cburnett),
+       not a full-height piece. A ball head over a stalk over a flared base
+       reads as a canopy on a trunk — the old mark looked like a tree. A crown
+       with two valleys cut into it has no silhouette a tree can borrow, and
+       being squat it keeps its articulation where a tall Staunton king loses
+       it. The single ink band across the foot is 9 units (≈23 px on this
+       canvas): thick enough to stay a line, not a grey blur, at 20 px.
+
+       Palette: ink background, ivory crown, gold trace.
+       The adaptive-icon foreground is assets/logo_foreground.svg, the same
+       art at 0.74 so it clears Android's safe zone. Edit BOTH together. -->
+
+  <rect width="512" height="512" fill="#14152A"/>
+
+  <!-- Crown. Cross, centre lobe, two side lobes, banded foot — drawn as
+       overlapping subpaths that union under the default nonzero fill rule. -->
+  <g transform="translate(256 46) scale(2.55) translate(-50 0)">
+    <g fill="#F7F1E3">
+      <path d="M45 0 h10 v8 h9 v10 h-9 v9 h-10 v-9 h-9 v-10 h9 z"/>
+      <path d="M50 20 C60 33 65 48 65 64 H35 C35 48 40 33 50 20 Z"/>
+      <circle cx="25" cy="62" r="23"/>
+      <circle cx="75" cy="62" r="23"/>
+      <path d="M14 62 H86 L88 84 C88 94 74 99 50 99 C26 99 12 94 12 84 Z"/>
+    </g>
+    <!-- The band is cut in the background ink and runs past the foot on both
+         sides; the overhang lands on the ink rect, so it is never seen. -->
+    <rect x="-4" y="72" width="108" height="9" fill="#14152A"/>
+  </g>
+
+  <!-- The trace. Round caps and joins so the spike reads as one stroke and
+       not as three segments once it is a few pixels wide. -->
+  <path d="M40 400 H150 L188 336 L228 464 L266 400 H472"
+        fill="none" stroke="#EFBA4E" stroke-width="34"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

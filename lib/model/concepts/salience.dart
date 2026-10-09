@@ -22,6 +22,7 @@ library;
 import 'package:dartchess/dartchess.dart';
 
 import '../classification.dart';
+import '../exchange.dart';
 import '../material_balance.dart';
 import '../move_facts.dart' show capturedSquare, landingSquare;
 import 'concept.dart';
@@ -47,6 +48,7 @@ Concept chooseConcept(ConceptInput input, [List<Concept>? candidates]) {
       _tacticBehind(input, found, pick) ??
       // A piece taken is said before a tactic; a pawn taken after one.
       _gainOverPraise(input, found, pick, minimum: 3) ??
+      _mateThreatFirst(input, found, pick) ??
       _tacticOverSideEffect(input, found, pick) ??
       _threatIgnored(input, found, pick) ??
       _gainOverPraise(input, found, pick) ??
@@ -151,6 +153,50 @@ Concept? _mateFirst(ConceptInput input, List<Concept> found, Concept pick) {
   return null;
 }
 
+/// A mate in one the move threatens (one the mover did not have already),
+/// or the one it stops, over a quiet idea, an attack on something smaller,
+/// or what else the move defends: "Black threatens mate on g2", not "piles
+/// up on the pawn on c3"; "stops the mate on g2", not "blocks the attack on
+/// the pawn on g2".
+Concept? _mateThreatFirst(
+  ConceptInput input,
+  List<Concept> found,
+  Concept pick,
+) {
+  if (pick.frame != Frame.does ||
+      !_belowMateThreat.contains(pick.kind) ||
+      _stopsMate(pick)) {
+    return null;
+  }
+  final newThreat = mateInOneUci(input.before) == null;
+  for (final c in rankedConcepts(input, found)) {
+    final threat =
+        newThreat &&
+        c.frame == Frame.threatens &&
+        c.kind == ConceptKind.mateThreat;
+    if ((threat || (c.frame == Frame.does && _stopsMate(c))) &&
+        passesLineTests(input, c, found)) {
+      return c;
+    }
+  }
+  return null;
+}
+
+bool _stopsMate(Concept c) =>
+    c.kind == ConceptKind.defendThreat && c.evidence.startsWith('stops ');
+
+/// What a mate in one, threatened or stopped, is said over.
+const _belowMateThreat = {
+  ..._quiet,
+  ..._sideEffects,
+  ConceptKind.attackPiece,
+  ConceptKind.gainTempo,
+  ConceptKind.pawnKick,
+  ConceptKind.pin,
+  ConceptKind.luft,
+  ConceptKind.kingActivity,
+};
+
 const _mateKinds = {
   ConceptKind.checkmate,
   ConceptKind.backRankMate,
@@ -219,7 +265,12 @@ Concept? _offerOverPraise(
 /// Nothing concrete there: the better move alone ("Stronger was Rhe8.").
 Concept? _reasonForSlip(ConceptInput input, List<Concept> found, Concept pick) {
   final verdict = input.verdict;
-  if (pick.frame != Frame.does || verdict == null) return null;
+  // What the move threatens is read as what it does: "threatens mate" under
+  // an Inaccuracy badge praises it.
+  if ((pick.frame != Frame.does && pick.frame != Frame.threatens) ||
+      verdict == null) {
+    return null;
+  }
   final serious = verdict.isMistakeOrWorse;
   if (!serious &&
       !(verdict == Classification.inaccuracy &&
@@ -284,7 +335,11 @@ Concept? _gainOverPraise(
   Concept pick, {
   int minimum = 0,
 }) {
-  if (pick.frame != Frame.does ||
+  if (pick.frame != Frame.does) return null;
+  // A piece WON is said over the tactic too ("wins the knight on c3", not
+  // "forks the rook on a1"); the tactic may follow it as a companion.
+  final overTactic = minimum >= 3 && _tacticsBelowAGain.contains(pick.kind);
+  if (!overTactic &&
       !(_quiet.contains(pick.kind) ||
           _sideEffects.contains(pick.kind) ||
           _structure.contains(pick.kind))) {
@@ -295,7 +350,7 @@ Concept? _gainOverPraise(
   final role = input.before.board.roleAt(taken);
   if (role == null || valueOf(role) < minimum) return null;
   final ranked = rankedConcepts(input, found);
-  for (final kinds in _captureOrder) {
+  for (final kinds in overTactic ? _captureOrder.take(1) : _captureOrder) {
     for (final c in ranked) {
       if (c.frame == Frame.does &&
           c.object == taken &&
@@ -307,6 +362,18 @@ Concept? _gainOverPraise(
   }
   return null;
 }
+
+/// The tactics a piece won outranks.
+const _tacticsBelowAGain = {
+  ConceptKind.fork,
+  ConceptKind.pin,
+  ConceptKind.skewer,
+  ConceptKind.discoveredAttack,
+  ConceptKind.pawnKick,
+  ConceptKind.attackPiece,
+  ConceptKind.gainTempo,
+  ConceptKind.pileOn,
+};
 
 /// What a capture is said as, best first.
 const _captureOrder = [
@@ -444,6 +511,8 @@ const Map<ConceptKind, Set<ConceptKind>> _pairs = {
   ConceptKind.centralControl: {ConceptKind.developPiece},
   // "takes back on d4 and forks the knight on c3"
   ConceptKind.recapture: {ConceptKind.fork},
+  ConceptKind.captureFree: {ConceptKind.fork},
+  ConceptKind.winMaterial: {ConceptKind.fork},
   // "defends the pawn on b7 and attacks the knight on d6"; a pawn kicks.
   ConceptKind.defendHanging: {ConceptKind.attackPiece, ConceptKind.pawnKick},
   ConceptKind.defendThreat: {ConceptKind.attackPiece, ConceptKind.pawnKick},
@@ -574,21 +643,31 @@ Concept? _praisedIdea(ConceptInput input, List<Concept> found) {
   return null;
 }
 
-/// An attack is worth naming only when the reply line answers it: in its
-/// first three moves the attacked piece moves or is taken, or the attacker
-/// is. Other concepts pass.
+/// An attack is worth naming only when the reply line answers it: the
+/// opponent's first move (after any checks it has to give first) moves the
+/// attacked piece, takes the attacker or covers the piece, or else the
+/// mover takes it next. A reply that takes a rook instead (Qc4, "attacking
+/// the pawn on d4", answered by Bxe8) answers nothing. Other concepts pass.
 bool _answered(ConceptInput input, Concept c) {
   final target = c.object;
   if (c.kind != ConceptKind.attackPiece || target == null) return true;
+  final mover = input.before.turn;
   final attacker = _landing(input);
   var position = input.before.play(input.played);
-  for (final uci in input.replyUci.take(3)) {
+  for (final (i, uci) in input.replyUci.take(3).indexed) {
     final move = Move.parse(uci);
     if (move is! NormalMove || !position.isLegal(move)) return false;
     if (move.from == target || move.to == target || move.to == attacker) {
       return true;
     }
     position = position.play(move);
+    if (i.isEven) {
+      // The opponent's move: an in-between check comes first, else this is
+      // the answer or there is none.
+      if (position.isCheck) continue;
+      return position.board.pieceAt(target)?.color == mover.opposite &&
+          staticExchange(position.board, target, mover) <= 0;
+    }
   }
   return false;
 }

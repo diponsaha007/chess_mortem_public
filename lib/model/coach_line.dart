@@ -498,9 +498,12 @@ _Act? _action(_Line l) {
           ? null
           : ('remove', 'removes', 'removing', 'the attacker, $piece');
     case ConceptKind.defendThreat:
-      return piece == null
-          ? ('parry', 'parries', 'parrying', 'the mating threat')
-          : ('parry', 'parries', 'parrying', 'the threat to $piece');
+      final stopped = _mateSquare(l.concept.evidence);
+      return piece != null
+          ? ('parry', 'parries', 'parrying', 'the threat to $piece')
+          : stopped != null
+          ? ('stop', 'stops', 'stopping', 'the mate on $stopped')
+          : ('parry', 'parries', 'parrying', 'the mating threat');
     case ConceptKind.castle:
       final side = l.frame == Frame.does
           ? castlingSide(l.input.before, l.input.played)
@@ -532,7 +535,10 @@ _Act? _action(_Line l) {
           ? ('open', 'opens', 'opening', 'the way for $piece')
           : ('develop', 'develops', 'developing', 'the $role');
     case ConceptKind.centralControl:
-      return ('fight', 'fights', 'fighting', 'for the centre');
+      final evidence = l.concept.evidence;
+      return evidence.startsWith('supports ')
+          ? ('support', 'supports', 'supporting', evidence.substring(9))
+          : ('fight', 'fights', 'fighting', 'for the centre');
     case ConceptKind.activeSquare:
       return l.concept.evidence.contains('connected')
           ? ('connect', 'connects', 'connecting', 'the rooks')
@@ -610,7 +616,13 @@ _Act? _action(_Line l) {
     case ConceptKind.promotion:
       return ('promote', 'promotes', 'promoting', 'a pawn');
     case ConceptKind.mateThreat:
-      return ('threaten', 'threatens', 'threatening', 'mate');
+      final on = _mateSquare(l.concept.evidence);
+      return (
+        'threaten',
+        'threatens',
+        'threatening',
+        on == null ? 'mate' : 'mate on $on',
+      );
     case ConceptKind.perpetualCheck:
       return l.concept.evidence.startsWith('keeps up')
           ? ('keep', 'keeps', 'keeping', 'up the perpetual check')
@@ -715,6 +727,18 @@ String? _special(_Line l) {
     case ConceptKind.backwardPawn
         when l.frame == Frame.allows && l.square != null:
       return 'This leaves a backward pawn on ${l.square}.';
+    // The same for pawns the move doubles or isolates itself; the reply's
+    // own doing ("the reply: …") is what it lets the opponent do.
+    case ConceptKind.doubledPawns || ConceptKind.isolatedPawn
+        when l.frame == Frame.allows &&
+            l.square != null &&
+            !l.concept.evidence.startsWith('the reply') &&
+            !l.concept.evidence.contains('later in the line'):
+      final owner = l.pawnOwner;
+      final pawns = owner == null ? 'the pawns' : '${l.whose(owner)} pawns';
+      return l.kind == ConceptKind.doubledPawns
+          ? 'This doubles $pawns on the ${l.square![0]}-file.'
+          : 'This leaves an isolated pawn on ${l.square}.';
     case ConceptKind.ignoredThreat when l.frame == Frame.allows:
       return piece == null
           ? 'This leaves the threat unanswered.'
@@ -818,6 +842,11 @@ String _ifTaken(_Line l) {
   return san == null ? '' : '; taking it lets in $san';
 }
 
+/// The square of the mate named in [evidence] ("threatens Qxg2# mate",
+/// "stops Qxg2# mate"), or null.
+String? _mateSquare(String evidence) =>
+    RegExp(r'([a-h][1-8])(=[QRBN])?#').firstMatch(evidence)?.group(1);
+
 /// "[who] [act]." in the concept's frame, with [extra]: "with check" on the
 /// clause that names the moved piece, and the paired idea after "and".
 String? _framed(_Line l, Companions extra) {
@@ -841,7 +870,13 @@ String? _framed(_Line l, Companions extra) {
   String phrase(String Function(_Act) form) {
     final check = extra.withCheck ? ' with check' : '';
     final and = follow == null ? '' : ' and ${clause(follow, form(follow))}';
-    return '${clause(lead, form(lead))}$check$and';
+    var first = clause(lead, form(lead));
+    // One "with" is enough: "kicks the rook on e8 with check".
+    const pawn = ' with a pawn';
+    if (check.isNotEmpty && first.endsWith(pawn)) {
+      first = first.substring(0, first.length - pawn.length);
+    }
+    return '$first$check$and';
   }
 
   String tail(String Function(_Act) form) => '${phrase(form)}.';
@@ -853,7 +888,7 @@ String? _framed(_Line l, Companions extra) {
     case Frame.threatens:
       final threaten = you ? 'threaten' : 'threatens';
       return l.kind == ConceptKind.mateThreat
-          ? '${l.who(l.mover)} $threaten mate.'
+          ? '${l.who(l.mover)} $threaten ${act.$4}.'
           : '${l.who(l.mover)} $threaten to ${tail(base)}';
     case Frame.allows:
       final who = l.who(l.mover.opposite);

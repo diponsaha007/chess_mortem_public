@@ -253,6 +253,16 @@ List<Concept> detectConcepts(ConceptInput input) {
       // A piece with no square that the better move merely attacks was
       // trapped already; only the line's reading says the move traps it.
       if (f.kind == ConceptKind.trappedPiece) continue;
+      // Damage to the mover's own pawns is no reason to play it ("gxf4,
+      // isolating the pawn on h3" of White's own h-pawn).
+      if (_structureKinds.contains(f.kind) &&
+          _ownWeakness(
+            f,
+            _settled(before.play(better), _parse(input.betterUci, 1)),
+            mover,
+          )) {
+        continue;
+      }
       add(f.kind, Frame.better, f.object, 'the better move: ${f.evidence}');
     }
     _fromReading(
@@ -553,6 +563,12 @@ bool _playsOn(Position before, Move move, Found f) {
 
 /// Whether [f] is a weakness of [side] itself: something it left en prise
 /// or exposed, or damage to its own pawns. Read as what the move ALLOWS.
+const _structureKinds = {
+  ConceptKind.doubledPawns,
+  ConceptKind.isolatedPawn,
+  ConceptKind.backwardPawn,
+};
+
 bool _ownWeakness(Found f, Board board, Side side) => switch (f.kind) {
   ConceptKind.hangingPiece ||
   ConceptKind.ignoredThreat ||

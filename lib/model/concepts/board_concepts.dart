@@ -59,7 +59,7 @@ List<Found> moveConcepts(
 
 /// The move and the boards around it, with the facts every detector asks.
 class _Move {
-  _Move(this.before, this.move, Move? followUp)
+  _Move(this.before, this.move, this.followUp)
     : after = before.play(move),
       mover = before.turn,
       piece = before.board.pieceAt(_from(move))!,
@@ -69,12 +69,13 @@ class _Move {
     // The follow-up only completes what THIS move started: the recapture
     // of a capture, on the same square. Otherwise its structure changes are
     // the reply's own.
+    final follow = followUp;
     final next =
         taken != null &&
-            followUp is NormalMove &&
-            followUp.to == to &&
-            after.isLegal(followUp)
-        ? after.play(followUp)
+            follow is NormalMove &&
+            follow.to == to &&
+            after.isLegal(follow)
+        ? after.play(follow)
         : null;
     settled = next ?? after;
   }
@@ -82,6 +83,9 @@ class _Move {
   final Position before;
   final Move move;
   final Position after;
+
+  /// The next move of the line, if any.
+  final Move? followUp;
 
   /// [after] plus the follow-up, when it was legal.
   late final Position settled;
@@ -644,7 +648,9 @@ List<Found> _safety(_Move m) {
     ));
   }
   final mateThreat = _mateInOne(m.before, m.opponent);
-  if (!m.before.isCheck && mateThreat != null) {
+  // A check only puts the threat off: the opponent answers it, and the
+  // mate is still there.
+  if (!m.before.isCheck && !m.after.isCheck && mateThreat != null) {
     if (m.after.isGameOver || _mateInOne(m.after, m.opponent) == null) {
       found.add((
         kind: ConceptKind.defendThreat,
@@ -835,13 +841,25 @@ List<Found> _pieces(_Move m, GamePhase phase) {
     final gained = m.attacksNow.diff(
       role == Role.pawn ? SquareSet.empty : m.attacksBefore,
     );
-    if (centre.has(m.to) || gained.isIntersected(centre)) {
+    // A centre square its own piece stands on is not won: the move backs
+    // up that piece (c3 behind a pawn on d4).
+    final own = m.board.bySide(m.mover);
+    final controls = gained.intersect(centre).diff(own);
+    final supports = gained.intersect(centre).intersect(own);
+    if (centre.has(m.to) || controls.isNotEmpty) {
       found.add((
         kind: ConceptKind.centralControl,
         object: m.to,
         evidence: centre.has(m.to)
             ? 'takes the centre square ${m.to.name}'
-            : 'now controls ${gained.intersect(centre).squares.map((s) => s.name).join(', ')}',
+            : 'now controls ${controls.squares.map((s) => s.name).join(', ')}',
+      ));
+    } else if (supports.isNotEmpty) {
+      final s = supports.first!;
+      found.add((
+        kind: ConceptKind.centralControl,
+        object: m.to,
+        evidence: 'supports the ${m.board.roleAt(s)!.name} on ${s.name}',
       ));
     }
   }
@@ -924,7 +942,7 @@ List<Found> _development(_Move m) {
   final start = _starts[m.mover]!;
   if (m.role != Role.pawn &&
       m.role != Role.king &&
-      start[m.from.name] == m.role) {
+      (start[m.from.name] == m.role || _castledRook(m))) {
     found.add((
       kind: ConceptKind.developPiece,
       object: m.to,
@@ -956,6 +974,19 @@ List<Found> _development(_Move m) {
     }
   }
   return found;
+}
+
+/// A rook leaving the square castling put it on, its king still beside it
+/// (Rf1-e1 after O-O): it comes into the game from there.
+bool _castledRook(_Move m) {
+  if (m.role != Role.rook || _relativeRank(m.mover, m.from) != 0) return false;
+  final king = m.before.board.kingOf(m.mover);
+  if (king == null || king.rank != m.from.rank) return false;
+  return switch (m.from.file) {
+    File.f => king.file == File.g,
+    File.d => king.file == File.c || king.file == File.b,
+    _ => false,
+  };
 }
 
 const _starts = {
@@ -1016,15 +1047,28 @@ Square? doubledRook(Position before, Move move) {
 List<Found> _rookFile(_Move m, SquareSet rooks) => [
   for (final s in rooks.squares)
     if (m.board.pawns
-        .intersect(m.board.bySide(m.mover))
-        .intersect(SquareSet.fromFile(s.file))
-        .isEmpty)
+            .intersect(m.board.bySide(m.mover))
+            .intersect(SquareSet.fromFile(s.file))
+            .isEmpty &&
+        _seesUpFile(m.board, s, m.mover))
       (
         kind: ConceptKind.rookOpenFile,
         object: s,
         evidence: 'the rook on ${s.name} stands on an open file',
       ),
 ];
+
+/// Whether the rook of [side] on [square] looks up its file: no piece of
+/// its own stands ahead of it (Re1 behind a bishop on e3 stands on no open
+/// file). An enemy piece ahead is what the rook presses on.
+bool _seesUpFile(Board board, Square square, Side side) {
+  final step = side == Side.white ? 8 : -8;
+  for (var s = square.offset(step); s != null; s = s.offset(step)) {
+    final piece = board.pieceAt(s);
+    if (piece != null) return piece.color != side;
+  }
+  return true;
+}
 
 bool _rooksConnected(Board board, Side side) {
   final rooks = board
@@ -1058,9 +1102,17 @@ List<Found> _pawns(_Move m, GamePhase phase) {
   final before = m.before.board;
   final after = m.settled.board;
 
-  if (m.role == Role.pawn && _isPassed(m.board, m.to, m.mover)) {
-    // "pushes" when it was passed already: nothing new is created.
-    final already = _isPassed(before, m.from, m.mover);
+  // A pawn the next move takes (axb3 Bxb3, or b3 Rxb3) becomes passed
+  // nowhere; one passed already is still pushed.
+  final next = m.followUp;
+  final taken =
+      m.settled.board.pieceAt(m.to) != m.landed ||
+      (next is NormalMove && next.to == m.to && m.after.isLegal(next));
+  // "pushes" when it was passed already: nothing new is created.
+  final already = m.role == Role.pawn && _isPassed(before, m.from, m.mover);
+  if (m.role == Role.pawn &&
+      (already || !taken) &&
+      _isPassed(m.board, m.to, m.mover)) {
     found.add((
       kind: ConceptKind.passedPawn,
       object: m.to,

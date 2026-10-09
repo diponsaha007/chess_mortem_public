@@ -1235,4 +1235,256 @@ void main() {
       );
     });
   });
+
+  group('what a quiet move is said to do', () {
+    List<Found> found(String fen, String san, {String? followUp}) {
+      final before = Chess.fromSetup(Setup.parseFen(fen));
+      return moveConcepts(
+        before,
+        before.parseSan(san)!,
+        followUp: followUp == null ? null : Move.parse(followUp),
+      );
+    }
+
+    // White has castled; no white pawn on the e-file, a black one on e7.
+    const castled =
+        'rn1qkb1r/pp2pppp/2p2n2/8/3P4/2N1BN2/PP3PPP/R2Q1RK1 w kq - 0 1';
+
+    test('a rook behind its own bishop is on no open file', () {
+      final concepts = found(castled, 'Re1');
+      expect(
+        concepts.map((f) => f.kind),
+        isNot(contains(ConceptKind.rookOpenFile)),
+      );
+      // Off the square castling put it on, it comes into the game.
+      expect(
+        concepts.where((f) => f.kind == ConceptKind.developPiece).single.object,
+        Square.e1,
+      );
+    });
+
+    test('with the bishop gone the file is half-open', () {
+      final concepts = found(castled.replaceFirst('2N1BN2', '2N2N2'), 'Re1');
+      expect(concepts.map((f) => f.kind), contains(ConceptKind.rookOpenFile));
+    });
+
+    test('a pawn behind its own centre pawn supports it', () {
+      const fen =
+          'rnbqkbnr/ppp1pppp/8/3p4/3P4/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 3';
+      final before = Chess.fromSetup(Setup.parseFen(fen));
+      final centre = found(
+        fen,
+        'c3',
+      ).where((f) => f.kind == ConceptKind.centralControl).single;
+      expect(centre.evidence, 'supports the pawn on d4');
+      expect(
+        coachSentence(
+          Concept(
+            centre.kind,
+            Frame.does,
+            object: centre.object,
+            evidence: centre.evidence,
+          ),
+          ConceptInput(
+            before: before,
+            played: before.parseSan('c3')!,
+            verdict: Classification.excellent,
+          ),
+        ),
+        'White supports the pawn on d4.',
+      );
+    });
+
+    test('a pawn taken straight back is not passed', () {
+      // ...axb3 Bxb3.
+      const fen = '4k3/8/8/8/p7/PPP5/2B5/4K3 b - - 0 1';
+      expect(
+        found(fen, 'axb3', followUp: 'c2b3').map((f) => f.kind),
+        isNot(contains(ConceptKind.passedPawn)),
+      );
+      expect(
+        found(fen, 'axb3').map((f) => f.kind),
+        contains(ConceptKind.passedPawn),
+      );
+    });
+  });
+
+  test('an attack the reply ignores for a rook is not "and attacks"', () {
+    // Qc4 escapes the bishop and hits d4; Bxe8 takes the rook instead, and
+    // only after ...Rxe8 does d4 move.
+    expect(
+      conceptLine(
+        _input(
+          '1r2r1k1/5ppp/8/1q2p3/B2P4/2P5/2Q2PPP/6K1 b - - 0 1',
+          'Qc4',
+          verdict: Classification.excellent,
+          betterUci: ['b5a6'],
+          replyUci: ['a4e8', 'b8e8', 'd4e5'],
+        ),
+      ),
+      'Black moves the queen to safety on c4.',
+    );
+  });
+
+  group('a mate in one', () {
+    // ...d4 opens the queen and bishop onto g2.
+    const threat = '6k1/1b3ppp/2q5/3p4/8/2P5/5PPP/R5K1 b - - 0 1';
+
+    test('threatened is said over what else the move attacks', () {
+      expect(
+        conceptLine(
+          _input(
+            threat,
+            'd4',
+            verdict: Classification.best,
+            replyUci: ['f2f3'],
+          ),
+        ),
+        'Black threatens mate on g2.',
+      );
+    });
+
+    test('stopped is said over the pawn it blocks for', () {
+      expect(
+        conceptLine(
+          _input(
+            '6k1/1b3ppp/2q5/8/3p4/2P5/5PPP/R5K1 w - - 0 2',
+            'f3',
+            verdict: Classification.good,
+            replyUci: ['d4c3'],
+          ),
+        ),
+        'White stops the mate on g2.',
+      );
+    });
+  });
+
+  group('a capture, a threat and the pawns', () {
+    test('a piece won is said over the fork it makes, which follows', () {
+      expect(
+        conceptLine(
+          _input(
+            '4k3/8/8/8/1b6/2N5/8/R3K3 b - - 0 1',
+            'Bxc3+',
+            verdict: Classification.best,
+            replyUci: ['e1e2', 'c3a1'],
+          ),
+        ),
+        'Black wins the knight on c3 for free with check and forks the rook '
+        'on a1.',
+      );
+    });
+
+    test('a check does not stop a mate, it only puts it off', () {
+      // ...Qxg2# is threatened; Ra8+ is answered and the threat stays.
+      const fen = '6k1/1b3ppp/2q5/8/3p4/2P5/5PPP/R5K1 w - - 0 2';
+      final before = Chess.fromSetup(Setup.parseFen(fen));
+      expect(
+        moveConcepts(before, before.parseSan('Ra8+')!).where(
+          (f) =>
+              f.kind == ConceptKind.defendThreat &&
+              f.evidence.startsWith('stops'),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('a mate threat is said over a pin', () {
+      // Qh5 pins f7 and threatens Qxf7#.
+      expect(
+        conceptLine(
+          _input(
+            'rnbqk1nr/pppp1ppp/8/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',
+            'Qh5',
+            verdict: Classification.good,
+            betterUci: ['g1f3'],
+            replyUci: ['d8e7'],
+          ),
+        ),
+        'White threatens mate on f7.',
+      );
+    });
+
+    test('a slip is not praised for the mate it threatens', () {
+      expect(
+        conceptLine(
+          _input(
+            '6k1/1b3ppp/2q5/3p4/8/2P5/5PPP/R5K1 b - - 0 1',
+            'd4',
+            verdict: Classification.inaccuracy,
+            betterUci: ['h7h6'],
+            replyUci: ['f2f3'],
+            winPctDrop: 6,
+          ),
+        ),
+        isNot(contains('mate')),
+      );
+    });
+
+    test('pawns a move doubles itself are its own doing', () {
+      // Bxf6 took the knight; ...gxf6 doubles Black's pawns.
+      const fen = 'rnbqkb1r/pppppppp/5B2/8/8/8/PPPPPPPP/RN1QKBNR b KQkq - 0 3';
+      final input = _input(
+        fen,
+        'gxf6',
+        verdict: Classification.mistake,
+        betterUci: ['e7f6'],
+        replyUci: ['g1f3'],
+      );
+      final doubled = detectConcepts(input).firstWhere(
+        (c) => c.kind == ConceptKind.doubledPawns && c.frame == Frame.allows,
+      );
+      expect(
+        coachSentence(doubled, input),
+        "This doubles Black's pawns on the f-file.",
+      );
+    });
+
+    test('the better move is not credited with damaging its own pawns', () {
+      // ...exf4 took on f4; gxf4 would double White's f-pawns and leave
+      // them isolated.
+      final input = _input(
+        'r2q1rk1/ppp2ppp/8/8/5p2/6PP/PPP1NP2/R2Q1RK1 w - - 0 1',
+        'Nxf4',
+        verdict: Classification.mistake,
+        previous: (to: Square.f4, captured: true),
+        betterUci: ['g3f4'],
+        replyUci: ['g8h8'],
+      );
+      expect(
+        detectConcepts(input).where(
+          (c) =>
+              c.frame == Frame.better &&
+              (c.kind == ConceptKind.isolatedPawn ||
+                  c.kind == ConceptKind.doubledPawns),
+        ),
+        isEmpty,
+      );
+    });
+
+    test(
+      'a pawn taken at once never became passed, a passed one is pushed',
+      () {
+        Iterable<ConceptKind> kinds(String fen, String san, String followUp) {
+          final before = Chess.fromSetup(Setup.parseFen(fen));
+          return moveConcepts(
+            before,
+            before.parseSan(san)!,
+            followUp: Move.parse(followUp),
+          ).map((f) => f.kind);
+        }
+
+        // ...b4 passes the pawn on a4, but the rook takes it.
+        expect(
+          kinds('4k3/8/8/1p6/P7/8/4K3/1R6 b - - 0 1', 'b4', 'b1b4'),
+          isNot(contains(ConceptKind.passedPawn)),
+        );
+        // A passed pawn pushed and taken was still pushed.
+        expect(
+          kinds('4k3/8/8/1p6/8/8/4K3/1R6 b - - 0 1', 'b4', 'b1b4'),
+          contains(ConceptKind.passedPawn),
+        );
+      },
+    );
+  });
 }

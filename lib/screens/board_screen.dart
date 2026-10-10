@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Directory;
 import 'dart:math' as math;
 
 import 'package:chessground/chessground.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../analysis/analysis_session.dart';
 import '../appearance/appearance_controller.dart';
@@ -15,17 +17,20 @@ import '../llm/llm_config.dart';
 import '../llm/llm_config_store.dart';
 import '../llm/move_explainer.dart';
 import '../llm/openai_explainer.dart';
+import '../logging/app_log.dart';
 import '../model/coach_emoji.dart';
 import '../model/game_tree.dart';
 import '../model/pv_line.dart';
 import '../model/sides.dart';
-import '../platform/share_pgn.dart';
+import '../platform/share_game.dart';
+import '../share/game_gif.dart';
 import '../widgets/app_bar_parts.dart';
 import '../widgets/coach_bar.dart';
 import '../widgets/eval_bar.dart';
 import '../widgets/explanation_sheet.dart';
 import '../widgets/material_bar.dart';
 import '../widgets/move_list.dart';
+import '../widgets/share_sheet.dart';
 import 'app_routes.dart';
 import 'summary_screen.dart';
 
@@ -46,6 +51,7 @@ class BoardScreen extends StatefulWidget {
     required this.configStore,
     this.explainerFactory = _openAiExplainer,
     this.sharer,
+    this.cacheDirectory = getTemporaryDirectory,
   });
 
   final AnalysisSession session;
@@ -55,7 +61,10 @@ class BoardScreen extends StatefulWidget {
   final MoveExplainer Function(LlmCredential credential) explainerFactory;
 
   /// Hands the game to the share sheet; injectable for tests.
-  final PgnSharer? sharer;
+  final GameSharer? sharer;
+
+  /// Where a shared GIF is written; injectable for tests.
+  final Future<Directory> Function() cacheDirectory;
 
   @override
   State<BoardScreen> createState() => _BoardScreenState();
@@ -363,21 +372,94 @@ class _BoardScreenState extends State<BoardScreen> {
     _discardExplainer();
   }
 
-  /// Shares the game as it was imported. Where there is no share sheet, it
-  /// is copied instead, so the action still does something.
+  /// Asks PGN or GIF where a file can be shared; elsewhere sends the PGN.
   Future<void> _share() async {
-    final pgn = session.pgn;
-    if (pgn == null) return;
+    final sharer = widget.sharer ?? GameSharer();
+    if (!sharer.sharesFiles) return _sharePgn(sharer);
+    final format = await showShareFormatSheet(
+      context,
+      gifReady: !session.isAnalyzing,
+    );
+    if (!mounted) return;
+    switch (format) {
+      case ShareFormat.pgn:
+        await _sharePgn(sharer);
+      case ShareFormat.gif:
+        await _shareGif(sharer);
+      case null:
+        return;
+    }
+  }
+
+  /// "White vs Black", where the PGN names both.
+  String? get _shareSubject {
     final white = session.tree.header('White');
     final black = session.tree.header('Black');
-    final subject = white != null && black != null ? '$white vs $black' : null;
-    final sharer = widget.sharer ?? PgnSharer();
-    if (await sharer.share(pgn, subject: subject)) return;
+    return white != null && black != null ? '$white vs $black' : null;
+  }
+
+  /// Shares the game as it was imported. Where there is no share sheet, it
+  /// is copied instead, so the action still does something.
+  Future<void> _sharePgn(GameSharer sharer) async {
+    final pgn = session.pgn;
+    if (pgn == null) return;
+    if (await sharer.share(pgn, subject: _shareSubject)) return;
     await Clipboard.setData(ClipboardData(text: pgn));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('PGN copied')));
+  }
+
+  /// Renders the mainline as a GIF behind a progress dialog, then shares the
+  /// file. Closing the dialog cancels.
+  Future<void> _shareGif(GameSharer sharer) async {
+    final export = GameGifExport(
+      session.tree,
+      orientation: _orientation,
+      appearance: AppearanceScope.of(context),
+      // Read by someone else: sides by colour, not "You".
+      coachLineFor: (node) => session.coachLineFor(node, neutral: true),
+    );
+    final navigator = Navigator.of(context);
+    var dialogOpen = true;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            GifProgressDialog(progress: export.progress, total: export.total),
+      ).whenComplete(() {
+        dialogOpen = false;
+        export.cancel();
+      }),
+    );
+
+    String? failure;
+    try {
+      final bytes = await export.render();
+      if (dialogOpen) navigator.pop();
+      if (bytes == null || !mounted) return;
+      final file = await writeSharedFile(
+        await widget.cacheDirectory(),
+        gifFileName(session.tree.header('White'), session.tree.header('Black')),
+        bytes,
+      );
+      final shown = await sharer.shareFile(
+        file.path,
+        mimeType: 'image/gif',
+        subject: _shareSubject,
+      );
+      if (!shown) failure = 'Could not open the share sheet';
+    } catch (e) {
+      AppLog.instance.error('share', 'GIF failed: $e');
+      if (dialogOpen) navigator.pop();
+      failure = 'Could not make the GIF';
+    }
+    if (failure == null || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(failure)));
   }
 
   void _openSummary() {

@@ -22,6 +22,13 @@ enum Classification {
   final String label;
 
   bool get isMistakeOrWorse => index >= Classification.mistake.index;
+
+  /// The moves that won or threw away the game: the win chart's dots and the
+  /// shared GIF's long frames. Inaccuracies are too common to mark.
+  bool get isTurningPoint =>
+      isMistakeOrWorse ||
+      this == Classification.brilliant ||
+      this == Classification.great;
 }
 
 /// How far the engine's best move is ahead of its second choice, in winning-

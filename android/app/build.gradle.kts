@@ -58,3 +58,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // FileProvider: hands a shared GIF to other apps (MainActivity.kt).
+    implementation("androidx.core:core:1.13.1")
+}

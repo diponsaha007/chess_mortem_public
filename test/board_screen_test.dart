@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' as io;
 
 import 'package:chess_mortem/analysis/analysis_session.dart';
 import 'package:chess_mortem/appearance/appearance_controller.dart';
@@ -8,7 +9,7 @@ import 'package:chess_mortem/llm/llm_config.dart';
 import 'package:chess_mortem/llm/move_explainer.dart';
 import 'package:chess_mortem/model/classification.dart';
 import 'package:chess_mortem/model/eval.dart';
-import 'package:chess_mortem/platform/share_pgn.dart';
+import 'package:chess_mortem/platform/share_game.dart';
 import 'package:chess_mortem/screens/board_screen.dart';
 import 'package:chess_mortem/widgets/coach_bar.dart';
 import 'package:chess_mortem/widgets/explanation_sheet.dart';
@@ -1038,27 +1039,39 @@ void main() {
     Future<_FakeSharer> pumpAndShare(
       WidgetTester tester, {
       required bool hasSheet,
+      bool sharesFiles = false,
+      AnalysisSession? session,
+      io.Directory? cache,
     }) async {
       tester.view.physicalSize = const Size(360, 740);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
-      final session = AnalysisSession(engine: FakeEngine());
-      await session.loadPgn(players);
-      final sharer = _FakeSharer(hasSheet: hasSheet);
+      if (session == null) {
+        session = AnalysisSession(engine: FakeEngine());
+        await session.loadPgn(players);
+      }
+      final sharer = _FakeSharer(hasSheet: hasSheet, sharesFiles: sharesFiles);
       await tester.pumpWidget(
         MaterialApp(
           home: BoardScreen(
             session: session,
             configStore: FakeConfigStore(hasKey: false),
             sharer: sharer,
+            cacheDirectory: () async => cache ?? io.Directory.systemTemp,
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      // Not pumpAndSettle: a sweep still running keeps its spinner turning.
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      await settle();
       await tester.tap(find.byIcon(Icons.more_vert));
-      await tester.pumpAndSettle();
+      await settle();
       await tester.tap(find.text('Share'));
-      await tester.pumpAndSettle();
+      await settle();
       return sharer;
     }
 
@@ -1092,6 +1105,73 @@ void main() {
       await pumpAndShare(tester, hasSheet: false);
       expect(copied, players);
       expect(find.text('PGN copied'), findsOne);
+    });
+
+    testWidgets('asks PGN or GIF where files can be shared', (tester) async {
+      final sharer = await pumpAndShare(
+        tester,
+        hasSheet: true,
+        sharesFiles: true,
+      );
+      expect(sharer.shared, isEmpty);
+      expect(find.text('PGN'), findsOne);
+      expect(find.text('GIF'), findsOne);
+
+      await tester.tap(find.text('PGN'));
+      await tester.pumpAndSettle();
+      expect(sharer.shared, [players]);
+      expect(sharer.files, isEmpty);
+    });
+
+    testWidgets('the GIF waits for the analysis', (tester) async {
+      final engine = _GatedEngine(stopAfter: 1);
+      final session = AnalysisSession(engine: engine);
+      unawaited(session.loadPgn(players));
+      final sharer = await pumpAndShare(
+        tester,
+        hasSheet: true,
+        sharesFiles: true,
+        session: session,
+      );
+      expect(find.text('After the analysis finishes'), findsOne);
+      final gif = tester.widget<ListTile>(
+        find.ancestor(of: find.text('GIF'), matching: find.byType(ListTile)),
+      );
+      expect(gif.enabled, isFalse);
+      expect(sharer.files, isEmpty);
+      engine.gate.complete();
+    });
+
+    testWidgets('shares the analysed game as a GIF file', (tester) async {
+      final cache = io.Directory.systemTemp.createTempSync('gif_share_test');
+      addTearDown(() => cache.deleteSync(recursive: true));
+      final sharer = await pumpAndShare(
+        tester,
+        hasSheet: true,
+        sharesFiles: true,
+        cache: cache,
+      );
+      await tester.tap(find.text('GIF'));
+      await tester.pump();
+      expect(find.text('Making GIF…'), findsOne);
+
+      // Decoding the pieces and the encoder's isolate are real work.
+      for (var i = 0; i < 200 && sharer.files.isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.text('Making GIF…'), findsNothing);
+      expect(sharer.files, hasLength(1));
+      final path = sharer.files.single;
+      expect(path, '${cache.path}/shared/Ann_Example-vs-Ben_Sample.gif');
+      expect(sharer.mimeType, 'image/gif');
+      expect(sharer.subject, 'Ann Example vs Ben Sample');
+      final bytes = io.File(path).readAsBytesSync();
+      expect(String.fromCharCodes(bytes.take(6)), 'GIF89a');
     });
   });
 
@@ -1130,12 +1210,30 @@ void main() {
 
 /// A [PgnSharer] that records what it was given; without a sheet it shares
 /// nothing, like a platform with no share sheet.
-class _FakeSharer extends PgnSharer {
-  _FakeSharer({required this.hasSheet});
+class _FakeSharer extends GameSharer {
+  _FakeSharer({required this.hasSheet, this.sharesFiles = false});
 
   final bool hasSheet;
   final shared = <String>[];
+  final files = <String>[];
   String? subject;
+  String? mimeType;
+
+  @override
+  final bool sharesFiles;
+
+  @override
+  Future<bool> shareFile(
+    String path, {
+    required String mimeType,
+    String? subject,
+  }) async {
+    if (!hasSheet) return false;
+    files.add(path);
+    this.mimeType = mimeType;
+    this.subject = subject;
+    return true;
+  }
 
   @override
   Future<bool> share(String pgn, {String? subject}) async {

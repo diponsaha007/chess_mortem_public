@@ -1,7 +1,7 @@
 name: chess_mortem
 description: "Free, private chess game analysis on your phone: Stockfish verdicts, plain-English coach lines, and what-if moves."
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.11.1
@@ -15,6 +15,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   flutter_svg: ^2.0.10
   http: ^1.2.0
+  image: ^4.5.4
   multistockfish: ^0.5.0
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2

@@ -557,11 +557,16 @@ class AnalysisSession extends ChangeNotifier {
   // ---- Explanations ----
 
   /// The ONE line about [node], in the user's voice ("You" / "Your
-  /// opponent") when [userSide] is known. [playful] adds the reaction at big
-  /// moments; the LLM is given the plain line.
-  String coachLineFor(GameNode node, {bool playful = true}) => coachLine(
+  /// opponent") when [userSide] is known, unless [neutral] (sides by colour,
+  /// for someone else to read). [playful] adds the reaction at big moments;
+  /// the LLM is given the plain line.
+  String coachLineFor(
+    GameNode node, {
+    bool playful = true,
+    bool neutral = false,
+  }) => coachLine(
     node,
-    userSide: userSide,
+    userSide: neutral ? null : userSide,
     phase: _phaseOf(node),
     playful: playful,
   );

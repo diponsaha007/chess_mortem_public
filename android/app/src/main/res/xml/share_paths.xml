@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder other apps may read from: the cache's "shared", where a
+     game is written before it goes to the share sheet. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

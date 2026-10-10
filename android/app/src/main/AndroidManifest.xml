@@ -49,6 +49,17 @@
                 <data android:mimeType="application/vnd.chess-pgn"/>
             </intent-filter>
         </activity>
+        <!-- Lets the share sheet read a shared GIF (MainActivity.kt), and
+             nothing outside res/xml/share_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

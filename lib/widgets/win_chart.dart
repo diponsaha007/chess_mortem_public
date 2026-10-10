@@ -163,12 +163,8 @@ class WinChartPainter extends CustomPainter {
   final Color labelColor;
   final Color labelBackground;
 
-  /// The verdicts worth a dot: the moves that won or threw away the game.
-  /// Inaccuracies are too common to mark.
-  static bool isTurningPoint(Classification c) =>
-      c.isMistakeOrWorse ||
-      c == Classification.brilliant ||
-      c == Classification.great;
+  /// The verdicts worth a dot.
+  static bool isTurningPoint(Classification c) => c.isTurningPoint;
 
   /// Where point [index] of [count] sits; shared with the callout.
   static double xOf(int index, int count, double width) =>

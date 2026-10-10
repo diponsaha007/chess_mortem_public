@@ -5,14 +5,17 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 /**
  * Hands PGNs that arrive from outside to Dart (`lib/platform/incoming_pgn.dart`):
  * text shared from another app, or a .pgn file opened with this one. And the
- * other way: a game shared from the app (`lib/platform/share_pgn.dart`).
+ * other way: a game shared from the app (`lib/platform/share_game.dart`), as
+ * text or as a file from the cache's shared folder.
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
@@ -34,12 +37,18 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL)
             .setMethodCallHandler { call, result ->
+                val subject = call.argument<String>("subject")
                 val text = call.argument<String>("text")
-                if (call.method == "share" && text != null) {
-                    share(text, call.argument<String>("subject"))
-                    result.success(true)
-                } else {
-                    result.notImplemented()
+                val path = call.argument<String>("path")
+                val mimeType = call.argument<String>("mimeType")
+                when {
+                    call.method == "share" && text != null -> {
+                        share(text, subject)
+                        result.success(true)
+                    }
+                    call.method == "shareFile" && path != null && mimeType != null ->
+                        result.success(shareFile(File(path), mimeType, subject))
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -51,6 +60,30 @@ class MainActivity : FlutterActivity() {
             putExtra(Intent.EXTRA_TEXT, text)
             if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
         }
+        showChooser(send)
+    }
+
+    /**
+     * Opens the share sheet with [file], read through the file provider. False
+     * when the file is outside the folder it exposes (res/xml/share_paths.xml).
+     */
+    private fun shareFile(file: File, mimeType: String, subject: String?): Boolean {
+        val uri = try {
+            FileProvider.getUriForFile(this, "$packageName.share", file)
+        } catch (e: IllegalArgumentException) {
+            return false
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        showChooser(send)
+        return true
+    }
+
+    private fun showChooser(send: Intent) {
         val chooser = Intent.createChooser(send, "Share game")
         // The app takes shared text in, so it would offer itself here.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

@@ -459,10 +459,10 @@ void main() {
       );
     });
 
-    test('material won straight back is a tactic, not a sacrifice', () {
-      // The same offer, but the engine's line collects the knight again two
-      // moves later. A count that stopped at the first reply would call it a
-      // sacrifice.
+    test('material won back later does not undo a sacrifice', () {
+      // The same offer, and the engine's line collects the knight again two
+      // moves later. White was still a piece down a whole move after Kxf7:
+      // the knight was given, and what the attack wins back is its payoff.
       expect(
         classifySac(
           before: _ranked(100, best: 'g5f7'),
@@ -474,7 +474,7 @@ void main() {
             depth: 20,
           ),
         ),
-        Classification.best,
+        Classification.brilliant,
       );
     });
 
@@ -658,6 +658,36 @@ void main() {
       expect(
         classifySac(before: runnerUp(100), after: after),
         Classification.brilliant,
+      );
+    });
+
+    test('a won position still allows a Brilliant when nothing else keeps '
+        'it crushing', () {
+      EngineEval runnerUp(int cp) => EngineEval(
+        cp: 900,
+        bestMoveUci: 'g5f7',
+        depth: 20,
+        alternatives: [
+          EngineLine(cp: cp, pvUci: const ['d1f3']),
+        ],
+      );
+      const after = EngineEval(
+        cp: 950,
+        bestMoveUci: 'e8f7',
+        pvUci: acceptedPv,
+        depth: 20,
+      );
+
+      // +3.1 is still winning (76 %), but 20 points behind: every other
+      // move would be a blunder.
+      expect(
+        classifySac(before: runnerUp(310), after: after),
+        Classification.brilliant,
+      );
+      // +5.0 (86 %) is winning and close: the position deserves the credit.
+      expect(
+        classifySac(before: runnerUp(500), after: after),
+        Classification.best,
       );
     });
 

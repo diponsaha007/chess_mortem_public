@@ -170,7 +170,9 @@ class _BoardScreenState extends State<BoardScreen> {
       lastMove: node.move,
       sideToMove: node.position.turn,
       playerSide: PlayerSide.both, // any position can take a what-if move
-      validMoves: makeLegalMoves(node.position),
+      validMoves: session.acceptsMoves
+          ? makeLegalMoves(node.position)
+          : const {},
       kingSquareInCheck: node.position.isCheck
           ? node.position.board.kingOf(node.position.turn)
           : null,

@@ -524,6 +524,26 @@ void main() {
       expect(node.eval?.bestMoveUci, isNull);
       expect(engine.callsByFen[node.position.fen], isNull);
     });
+
+    test('ends the line: no what-if move is played after it', () async {
+      final session = AnalysisSession(engine: FakeEngine());
+      await session.loadPgn('$shuffle Nc6 *');
+      session.goToNode(session.tree.mainline[6]);
+      final drawn = await session.playMove(Move.parse('f6g8')!);
+      expect(session.acceptsMoves, isFalse);
+      final after = await session.playMove(Move.parse('g1f3')!);
+      expect(after, same(drawn));
+      expect(drawn.children, isEmpty);
+    });
+
+    test('a third time the game played past still takes moves', () async {
+      final session = AnalysisSession(engine: FakeEngine());
+      await session.loadPgn('$shuffle Ng8 5. e4 *');
+      session.goToNode(session.tree.mainline[7]);
+      expect(session.acceptsMoves, isTrue);
+      final node = await session.playMove(Move.parse('d2d4')!);
+      expect(node.parent, same(session.tree.mainline[7]));
+    });
   });
 
   group('runner-up search', () {

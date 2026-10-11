@@ -374,9 +374,15 @@ class AnalysisSession extends ChangeNotifier {
     }
   }
 
+  /// Whether a what-if move can be played from [current]. A repetition that
+  /// ends the game ends the line, as a mate does.
+  bool get acceptsMoves => !drawnByRepetition(current);
+
   /// A what-if move. Reuses an existing edge (no engine work) and evaluates
-  /// otherwise. Moves the cursor either way.
+  /// otherwise. Moves the cursor either way. Ignored where the line has
+  /// ended ([acceptsMoves]).
   Future<GameNode> playMove(Move move) async {
+    if (!acceptsMoves) return current;
     _followingSweep = false;
     final node = tree.addMove(current, move, isUserMove: true);
     current = node;

@@ -205,7 +205,8 @@ Classification classify({
       )) {
     // Taking back what was just taken gives nothing up, even when the
     // piece that does it is left en prise.
-    if (winPctFor(after, mover) >= brilliantFloorWinPct &&
+    if (!_wasWinningAnyway(before: before, mover: mover) &&
+        winPctFor(after, mover) >= brilliantFloorWinPct &&
         !_isRecapture(positionBefore, played, previousCaptureUci) &&
         _isBrilliant(
           mover: mover,
@@ -271,9 +272,10 @@ bool _isMiss({
 /// The opponent's drop that counts as a gift: the Mistake threshold.
 const double _opponentSlip = 10;
 
-/// The four tests both promotions share, each ruling out a class of false
-/// positive: not escaping check, not a promotion, not lost after (the
-/// lower floor, Great's), and not winning anyway.
+/// The three tests both promotions share, each ruling out a class of false
+/// positive: not escaping check, not a promotion, and not lost after (the
+/// lower floor, Great's). "Winning anyway" is each promotion's own:
+/// [_wasWinningAnyway] for Brilliant, [greatRunnerUpCeiling] for Great.
 bool _isCriticalCandidate({
   required EngineEval before,
   required EngineEval after,
@@ -283,15 +285,22 @@ bool _isCriticalCandidate({
 }) {
   if (positionBefore.isCheck) return false;
   if (played is NormalMove && played.promotion != null) return false;
-  if (winPctFor(after, mover) < greatFloorWinPct) return false;
-  return !_wasWinningAnyway(before: before, mover: mover);
+  return winPctFor(after, mover) >= greatFloorWinPct;
 }
 
-/// True when the SECOND-best move already won outright. Asked of the
-/// runner-up, not the position: a queen sacrificed for mate is at the
-/// ceiling before it is played, and must still qualify.
+/// True when the SECOND-best move already won outright, and was not far
+/// behind the best. Asked of the runner-up, not the position: a queen
+/// sacrificed for mate is at the ceiling before it is played, and must still
+/// qualify. Nor does a won position rule a move out when every other move
+/// throws [brilliantGapWhenWinning] points away: keeping a crushing position
+/// instead of a merely won one is still the find.
 bool _wasWinningAnyway({required EngineEval before, required Side mover}) =>
-    winPctFor(before.secondBest!, mover) >= winningWinPct;
+    winPctFor(before.secondBest!, mover) >= winningWinPct &&
+    onlyMoveGap(before, mover)! < brilliantGapWhenWinning;
+
+/// The gap at which a Brilliant may come from a position already won: the
+/// Blunder threshold, so "anything else is a blunder".
+const double brilliantGapWhenWinning = 15;
 
 /// A move that gives material away and is still right: something is on
 /// offer, the opponent can legally take it, and it is really given up —

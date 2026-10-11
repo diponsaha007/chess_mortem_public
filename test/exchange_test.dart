@@ -260,6 +260,46 @@ void main() {
       );
     });
 
+    test('a piece still down a move later is a sacrifice, whatever the '
+        'line wins after', () {
+      // 20...Nxf3+ 21.gxf3 Qxf3: a knight for two pawns, still a pawn down
+      // when White moves on, and then ...Qxc3 wins the queen.
+      final before = Chess.fromSetup(
+        Setup.parseFen(
+          'r3r1k1/pb3p1p/1p4p1/2pq4/2Nn4/1PQB1P2/P5PP/R3R1K1 b - - 0 20',
+        ),
+      );
+      expect(
+        sacrificeHolds(
+          positionAfter: before.play(Move.parse('d4f3')!),
+          mover: Side.black,
+          materialBefore: materialFor(before.board, Side.black),
+          // gxf3, Qxf3, Be4, Qxc3, Bxb7, Rxe1+.
+          pvUci: const ['g2f3', 'd5f3', 'd3e4', 'f3c3', 'e4b7', 'e8e1'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('a deficit gone by the next move is a trade, not a sacrifice', () {
+      // 32.Qxf8+ Qxf8 33.Rxf8+ Kxf8: the queen is down for one move only.
+      final before = Chess.fromSetup(
+        Setup.parseFen(
+          '5rk1/1r4pp/bR6/3Pp3/p3P3/q2p1Q1P/3N2P1/5R1K w - - 1 32',
+        ),
+      );
+      expect(
+        sacrificeHolds(
+          positionAfter: before.play(Move.parse('f3f8')!),
+          mover: Side.white,
+          materialBefore: materialFor(before.board, Side.white),
+          // Qxf8, Rxf8+, Kxf8, Rxa6.
+          pvUci: const ['a3f8', 'f1f8', 'g8f8', 'b6a6'],
+        ),
+        isFalse,
+      );
+    });
+
     test('a line nothing is known about is not a sacrifice', () {
       expect(
         sacrificeHolds(

@@ -84,13 +84,16 @@ List<Square> offeredPieces(
 bool canBeCaptured(Position after, Square square) =>
     after.legalMoves.values.any((destinations) => destinations.has(square));
 
-/// True when [mover] is STILL at least [sacrificeThreshold] pawns down at
-/// every mover-to-move checkpoint of the first six plies of the engine's
-/// line [pvUci] from [positionAfter] — an investment, not a tactic that wins
-/// it straight back.
+/// True when the engine's line [pvUci] from [positionAfter] puts [mover] at
+/// least [sacrificeThreshold] pawns down at a mover-to-move checkpoint of its
+/// first six plies, and [mover] is STILL at least a pawn down at the next
+/// checkpoint (or the line ends there) — an investment, not a trade that
+/// evens out on the next move. What the line wins later does not undo it: a
+/// knight given for two pawns that then wins the queen was still given.
 ///
-/// A line ending in mate for [mover] holds; a line with no checkpoint does
-/// not. Same idea as lichess's puzzle tagger (`tagger/cook.py`, `sacrifice`).
+/// A line ending in mate for [mover] holds; a line never down that far does
+/// not. Same idea as lichess's puzzle tagger (`tagger/cook.py`,
+/// `sacrifice`), which asks for the deficit at any checkpoint.
 bool sacrificeHolds({
   required Position positionAfter,
   required Side mover,
@@ -98,7 +101,7 @@ bool sacrificeHolds({
   required List<String> pvUci,
 }) {
   var position = positionAfter;
-  var checkpoints = 0;
+  var down = false;
 
   for (final uci in pvUci.take(_sacrificePlies)) {
     final move = Move.parse(uci);
@@ -109,14 +112,15 @@ bool sacrificeHolds({
     if (position.isGameOver) break;
     if (position.turn != mover) continue;
 
-    checkpoints++;
-    if (materialBefore - materialFor(position.board, mover) <
-        sacrificeThreshold) {
-      return false;
-    }
+    final deficit = materialBefore - materialFor(position.board, mover);
+    if (down) return deficit >= _stillDown;
+    down = deficit >= sacrificeThreshold;
   }
-  return checkpoints > 0;
+  return down;
 }
+
+/// What a sacrifice must still be down a move after it is taken, in pawns.
+const int _stillDown = 1;
 
 const int _sacrificePlies = 6;
 

@@ -1094,6 +1094,14 @@ bool passesLineTests(ConceptInput input, Concept c, List<Concept> found) {
   switch (c.frame) {
     case Frame.allows:
       if (!lineTouches(after, input.replyUci, object)) return false;
+      // A piece the engine leaves alone for a quiet move was not hanging,
+      // whatever the exchange count says: taking it may lose (…Nxh4??
+      // Qh7#), and what the engine played instead is the point.
+      if ((c.kind == ConceptKind.hangingPiece ||
+              c.kind == ConceptKind.ignoredThreat) &&
+          !_takenOutright(after, input.replyUci, object)) {
+        return false;
+      }
       // Lost to the engine's own move too: not what THIS move allowed.
       if (_lossKinds.contains(c.kind) && !input.isEngineMove) {
         final origin = object == _landing(input) ? _from(input.played) : object;
@@ -1300,6 +1308,33 @@ bool lineTakes(
     if (move.from == square) return false;
     if (move.to == square && position.turn != owner) return true;
     position = position.play(move);
+  }
+  return false;
+}
+
+/// Whether the line from [start] takes the piece on [square] outright: its
+/// owner's opponent takes it with the first move that is not a check or a
+/// capture, within [plies], and the piece never moves first.
+bool _takenOutright(
+  Position start,
+  List<String> pvUci,
+  Square square, {
+  int plies = 6,
+}) {
+  var position = start;
+  final owner = start.board.sideAt(square);
+  if (owner == null) return false;
+  for (final uci in pvUci.take(plies)) {
+    final move = Move.parse(uci);
+    if (move is! NormalMove || !position.isLegal(move)) return false;
+    if (move.from == square) return false;
+    final next = position.play(move);
+    if (position.turn != owner) {
+      if (move.to == square) return true;
+      final forcing = next.isCheck || capturedSquare(position, move) != null;
+      if (!forcing) return false;
+    }
+    position = next;
   }
   return false;
 }

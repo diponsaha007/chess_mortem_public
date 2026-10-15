@@ -47,6 +47,25 @@ final _blunder = _input(
   winPctDrop: 30,
 );
 
+// g4 leaves the knight on h4 en prise, but taking it gets mated on h7; the
+// engine's reply is the skewer Bb5.
+final _poisoned = _input(
+  'r4rk1/pp1bnpp1/1q2p1np/3pP3/3P1P1N/P1BQ2P1/1PB4P/R4RK1 w - - 4 18',
+  'g4',
+  verdict: Classification.blunder,
+  betterUci: ['a2a4'],
+  replyUci: ['d7b5', 'd3g3', 'b5f1', 'a1f1', 'g6h4', 'g3h4', 'f7f6'],
+  tags: const MoveTags(
+    allowed: LineReading(
+      motifs: {Motif.skewer},
+      won: [Role.rook],
+      gave: [Role.bishop],
+      pays: true,
+    ),
+  ),
+  winPctDrop: 21.5,
+);
+
 // Taking back on d5 after exd5: a Best move.
 final _recapture = _input(
   'rnbqkbnr/pp1p1ppp/8/2pp4/4P3/8/PPP2PPP/RNBQKBNR w KQkq - 0 4',
@@ -93,6 +112,14 @@ void main() {
         final pick = choose(_blunder);
         expect(pick.frame, Frame.allows);
         expect(pick.kind, ConceptKind.hangingPiece);
+      });
+
+      test('a piece the reply leaves alone is not called hanging', () {
+        // g4 takes the pawn's guard off the knight on h4, but …Nxh4?? is
+        // met by Qh7#: the engine skewers instead and takes the knight later.
+        final pick = choose(_poisoned);
+        expect(pick.kind, ConceptKind.skewer);
+        expect(pick.frame, Frame.allows);
       });
 
       test('names a recapture as one', () {

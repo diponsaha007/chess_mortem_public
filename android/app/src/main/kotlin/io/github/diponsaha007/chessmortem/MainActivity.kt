@@ -41,9 +41,10 @@ class MainActivity : FlutterActivity() {
                 val text = call.argument<String>("text")
                 val path = call.argument<String>("path")
                 val mimeType = call.argument<String>("mimeType")
+                val title = call.argument<String>("title") ?: "Share game"
                 when {
                     call.method == "share" && text != null -> {
-                        share(text, subject)
+                        share(text, subject, title)
                         result.success(true)
                     }
                     call.method == "shareFile" && path != null && mimeType != null ->
@@ -54,13 +55,13 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Opens the system share sheet with [text], leaving this app out of it. */
-    private fun share(text: String, subject: String?) {
+    private fun share(text: String, subject: String?, title: String) {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
             if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
         }
-        showChooser(send)
+        showChooser(send, title)
     }
 
     /**
@@ -79,12 +80,12 @@ class MainActivity : FlutterActivity() {
             if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        showChooser(send)
+        showChooser(send, "Share game")
         return true
     }
 
-    private fun showChooser(send: Intent) {
-        val chooser = Intent.createChooser(send, "Share game")
+    private fun showChooser(send: Intent, title: String) {
+        val chooser = Intent.createChooser(send, title)
         // The app takes shared text in, so it would offer itself here.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             chooser.putExtra(

@@ -94,7 +94,7 @@ class NnueAssets {
     final response = await _client.send(http.Request('GET', urlFor(name)));
     if (response.statusCode != 200) {
       throw HttpException(
-        'Could not download $name — the server answered '
+        'Could not download $name: the server answered '
         'HTTP ${response.statusCode}',
         uri: urlFor(name),
       );

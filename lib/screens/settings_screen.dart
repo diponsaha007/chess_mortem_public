@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../appearance/appearance_controller.dart';
 import '../engine/nnue_assets.dart';
@@ -10,6 +11,7 @@ import '../feedback/move_sounds.dart';
 import '../llm/llm_config.dart';
 import '../llm/llm_config_store.dart';
 import '../logging/app_log.dart';
+import '../platform/share_game.dart';
 import '../widgets/appearance_picker.dart';
 import '../widgets/info_note.dart';
 import '../widgets/key_help.dart';
@@ -24,6 +26,8 @@ const playerNameTileKey = ValueKey('settingsPlayerName');
 const playerNameFieldKey = ValueKey('settingsPlayerNameField');
 const sourceCodeTileKey = ValueKey('settingsSourceCode');
 const privacyPolicyTileKey = ValueKey('settingsPrivacyPolicy');
+const rateAppTileKey = ValueKey('settingsRateApp');
+const shareAppTileKey = ValueKey('settingsShareApp');
 
 /// Where the app's source is published with every release.
 const sourceCodeUrl = 'https://github.com/diponsaha007/chess_mortem_public';
@@ -31,28 +35,42 @@ const sourceCodeUrl = 'https://github.com/diponsaha007/chess_mortem_public';
 /// PRIVACY.md in that repo; `HEAD` follows its default branch.
 const privacyPolicyUrl = '$sourceCodeUrl/blob/HEAD/PRIVACY.md';
 
+const _appId = 'io.github.diponsaha007.chessmortem';
+
+/// The app's Play listing, in the Play Store app where there is one.
+const playStoreAppUrl = 'market://details?id=$_appId';
+
+/// The same listing on the web, for everywhere else.
+const playStoreWebUrl = 'https://play.google.com/store/apps/details?id=$_appId';
+
+/// What "Share Chess Mortem" sends.
+const shareAppText =
+    'Chess Mortem is a free chess analyzer. It reviews your games on your '
+    'phone and explains, in plain English, where you played well and where '
+    'you missed a win. '
+    '$playStoreWebUrl';
+
 // What each setting means, behind its ⓘ.
 
 const _playerNote = InfoNote(
   title: 'Your name',
   body:
-      'Your name as it appears in your PGNs. The board then opens on your '
-      'side, and reviews your key moves only.',
+      'Your name as it is in your PGNs. The board opens on your side and '
+      'skips to your key moves.',
 );
 
 const _depthNote = InfoNote(
   title: 'Search depth',
   body:
-      'How far ahead the engine looks. Higher is stronger but slower, and '
-      'applies from now on. A saved game is analysed again when it is '
-      'reopened at a higher depth.',
+      'How far ahead the engine looks. Higher is stronger but slower. '
+      'Applies right away. Raising it analyses saved games again when you '
+      'reopen them.',
 );
 
 const _criticalNote = InfoNote(
   title: 'Brilliant & Great',
   body:
-      'After a best move, the engine checks the next-best one, so the app '
-      'can tell when only one move worked. Adds a little time on those moves.',
+      'Enables Brilliant and Great moves. Makes the analysis a little slower.',
 );
 
 const _engineNote = InfoNote(
@@ -65,13 +83,12 @@ const _engineNote = InfoNote(
 final _keysNote = InfoNote(
   title: 'API keys',
   body:
-      'Written explanations need a key from an AI provider. All of these '
-      'give one for free, no card needed:\n'
+      'Free keys, no card needed:\n'
       '${_freeProviders.map((name) => '• $name').join('\n')}\n\n'
-      'A key is stored encrypted on this device and sent only to its '
+      'Keys are stored encrypted on this device and sent only to their '
       'provider.\n\n'
-      'Tip: each free key has a rate limit. Add a key from every provider '
-      'and switch to another when one runs out.',
+      'Each free key has a usage limit. Add a few and switch when one runs '
+      'out.',
 );
 
 /// The providers whose free, card-less key was checked.
@@ -92,6 +109,8 @@ class SettingsScreen extends StatefulWidget {
     this.nnueAssets,
     this.runningEngineName,
     this.launchLink = launchInBrowser,
+    this.launchPage = launchInApp,
+    this.sharer,
   });
 
   final LlmConfigStore configStore;
@@ -113,6 +132,13 @@ class SettingsScreen extends StatefulWidget {
 
   /// Injectable for tests.
   final LinkLauncher launchLink;
+
+  /// Opens a page to read inside the app (the privacy policy). Injectable for
+  /// tests.
+  final LinkLauncher launchPage;
+
+  /// Injectable for tests; the system share sheet otherwise.
+  final GameSharer? sharer;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -239,13 +265,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _downloadProgress = null;
         _downloadError =
             '${_reasonFor(e)} Still using $bundledEngineName'
-            '${showLogsScreen ? ' — see Logs for details' : ''}.';
+            '${showLogsScreen ? '. See Logs for details' : ''}.';
       });
     }
   }
 
   String _reasonFor(Object error) {
-    if (error is SocketException) return 'No connection to the net server.';
+    if (error is SocketException) return 'No connection.';
     if (error is HttpException) return error.message;
     return 'The download did not finish.';
   }
@@ -413,14 +439,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _EngineChoice(
         key: bundledEngineTileKey,
         name: bundledEngineName,
-        detail: 'Bundled. Works offline.',
+        detail: 'Built in, works offline',
         selected: !_config.useLatestEngine,
         onTap: busy ? null : () => _selectEngine(useLatest: false),
       ),
       _EngineChoice(
         key: latestEngineTileKey,
         name: latestEngineName,
-        detail: _netsReady ? 'Stronger. Nets ready.' : 'Stronger. Needs 80 MB.',
+        detail: _netsReady
+            ? 'Stronger, downloaded'
+            : 'Stronger, 80 MB download',
         selected: _config.useLatestEngine,
         onTap: busy ? null : () => _selectEngine(useLatest: true),
         action: _netsReady
@@ -442,7 +470,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               LinearProgressIndicator(value: _downloadProgress),
               const SizedBox(height: 4),
               Text(
-                'Downloading nets… ${(_downloadProgress! * 100).round()}%',
+                'Downloading… ${(_downloadProgress! * 100).round()}%',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -490,20 +518,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     void open(String url) => openLink(context, url, launch: widget.launchLink);
     return [
       ListTile(
-        key: sourceCodeTileKey,
-        leading: const Icon(Icons.code),
-        title: const Text('Source code'),
-        subtitle: Text('Free software, GPL-3.0 or later', style: detail),
+        key: rateAppTileKey,
+        leading: const Icon(Icons.star_outline),
+        title: const Text('Rate Chess Mortem'),
+        subtitle: Text('On Google Play', style: detail),
         trailing: const Icon(Icons.open_in_new),
-        onTap: () => open(sourceCodeUrl),
+        onTap: _rateApp,
+      ),
+      ListTile(
+        key: shareAppTileKey,
+        leading: const Icon(Icons.share_outlined),
+        title: const Text('Share Chess Mortem'),
+        subtitle: Text('Send a friend the link', style: detail),
+        onTap: _shareApp,
       ),
       ListTile(
         key: privacyPolicyTileKey,
         leading: const Icon(Icons.privacy_tip_outlined),
         title: const Text('Privacy policy'),
         subtitle: Text('Nothing is collected', style: detail),
-        trailing: const Icon(Icons.open_in_new),
-        onTap: () => open(privacyPolicyUrl),
+        onTap: () =>
+            openLink(context, privacyPolicyUrl, launch: widget.launchPage),
       ),
       ListTile(
         key: licencesButtonKey,
@@ -517,7 +552,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'GPL-3.0 or later, with no warranty.',
         ),
       ),
+      ListTile(
+        key: sourceCodeTileKey,
+        leading: const Icon(Icons.code),
+        title: const Text('Source code'),
+        subtitle: Text('Free software, GPL-3.0 or later', style: detail),
+        trailing: const Icon(Icons.open_in_new),
+        onTap: () => open(sourceCodeUrl),
+      ),
     ];
+  }
+
+  /// The Play Store app's page for this app, or the web listing without it.
+  Future<void> _rateApp() async {
+    try {
+      if (await widget.launchLink(Uri.parse(playStoreAppUrl))) return;
+    } catch (_) {
+      // No Play Store app: the web listing below.
+    }
+    if (!mounted) return;
+    await openLink(context, playStoreWebUrl, launch: widget.launchLink);
+  }
+
+  /// The share sheet with the app's link; copied where there is none.
+  Future<void> _shareApp() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final sharer = widget.sharer ?? GameSharer();
+    if (await sharer.share(
+      shareAppText,
+      subject: 'Chess Mortem',
+      title: 'Share Chess Mortem',
+    )) {
+      return;
+    }
+    await Clipboard.setData(const ClipboardData(text: shareAppText));
+    messenger.showSnackBar(const SnackBar(content: Text('Link copied')));
   }
 
   List<Widget> _explanationRows(BuildContext context) {
@@ -527,8 +596,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Text(
-            'No keys yet — the engine writes the coach line alone. '
-            '"Add key" shows how to get a free one.',
+            'Every move still gets a coach line. Add a free key for AI '
+            'explanations.',
             style: theme.textTheme.bodyMedium,
           ),
         ),

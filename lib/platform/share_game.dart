@@ -14,10 +14,11 @@ class GameSharer {
   bool get sharesFiles =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  /// Opens the share sheet with [pgn]. [subject] titles it where the target
-  /// has a subject line (email). False when this platform has no share sheet.
-  Future<bool> share(String pgn, {String? subject}) =>
-      _invoke('share', {'text': pgn, 'subject': subject});
+  /// Opens the share sheet with [text], a PGN or the app's link. [subject]
+  /// titles it where the target has a subject line (email); [title] heads the
+  /// sheet itself. False when this platform has no share sheet.
+  Future<bool> share(String text, {String? subject, String? title}) =>
+      _invoke('share', {'text': text, 'subject': subject, 'title': title});
 
   /// Opens the share sheet with the file at [path], which must be in the
   /// cache's shared folder (the only one the file provider exposes).

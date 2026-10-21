@@ -93,7 +93,7 @@ void main() {
         classification: Classification.brilliant,
         bestBefore: 'd2d4',
       );
-      expect(moveSummaryLine(node), 'Gave up material — and it works.');
+      expect(moveSummaryLine(node), 'A sacrifice that pays off.');
     });
 
     test('Great says it was the only move', () {
@@ -116,7 +116,7 @@ void main() {
         );
         expect(
           moveSummaryLine(node),
-          "Let the opponent's mistake go — d4 would have punished it.",
+          "Let the opponent's mistake go. d4 would have punished it.",
         );
       },
     );

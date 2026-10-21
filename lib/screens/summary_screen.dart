@@ -314,7 +314,7 @@ class _AnalysingLine extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            'Still analysing — ${session.analyzedMoves} of '
+            'Still analysing: ${session.analyzedMoves} of '
             '${session.totalMoves} moves',
             style: Theme.of(context).textTheme.bodySmall,
           ),

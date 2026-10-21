@@ -1236,9 +1236,9 @@ class _FakeSharer extends GameSharer {
   }
 
   @override
-  Future<bool> share(String pgn, {String? subject}) async {
+  Future<bool> share(String text, {String? subject, String? title}) async {
     if (!hasSheet) return false;
-    shared.add(pgn);
+    shared.add(text);
     this.subject = subject;
     return true;
   }

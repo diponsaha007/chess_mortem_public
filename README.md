@@ -1,37 +1,34 @@
 # Chess Mortem
 
-A free chess coach for your games: every move explained in plain English.
-
-Paste a game or share a PGN into the app. Stockfish checks every move, gives it
-a verdict from Brilliant to Blunder, and a coach line under the board says what
-happened: "You allowed your opponent to fork the rook on a8".
-
-## Why Chess Mortem
-
-- **Free, with no daily limit.** Review every game you play. No subscription,
-  no ads, no "come back tomorrow".
-- **Your games stay on your phone.** Stockfish runs on the device, and each
-  move's coach line is written by the app from the board itself, so analysis
-  works offline. There is no account, and nothing is uploaded unless you ask
-  for an AI explanation.
-- **Ask "what if?"** Play any move on any position. It becomes a variation, gets
-  evaluated and moves the eval bar.
-- **AI explanations, if you want them.** Get a free API key from Groq, Google
-  Gemini, OpenRouter or NVIDIA NIM (no card needed), add it in Settings, and
-  "Explain more" turns any coach line into a short paragraph. Each free key
-  has a rate limit; add keys from several providers and switch when one runs
-  out.
-- **Open source.** The full source of every release is public under the GPL.
+Chess Mortem is a free chess analyzer for your games. Share a game from any
+app and get analysis in plain English, run locally on your device.
 
 ## What you get
 
-- Verdicts: Brilliant, Great, Best, Excellent, Good, Inaccuracy, Mistake, Miss,
-  Blunder.
-- The engine's better line for every mistake, to step through on the board.
-- Skip buttons that jump straight to the moves that decided the game.
-- A summary with winning chances over the game, accuracy per player and per
-  phase, and a count of each verdict.
-- Openings named from a built-in book.
+- **Coach line**: one line per move on what happened: the tactic you fell
+  for, the piece you left hanging, the win you missed, or the brilliant move you
+  found.
+- **Stockfish analysis**: Stockfish analyzes every move at the depth you pick,
+  from 10 to 22, and the app rates it: Brilliant, Great, Best, Excellent, Good,
+  Inaccuracy, Mistake, Miss or Blunder. Stockfish 16 is bundled in the app.
+  Stockfish 18 is an optional download for stronger analysis.
+- **Better moves**: on every mistake, blunder or miss, see the move you should
+  have played, why, and its line.
+- **What if**: try any move in any position and see whether it would have
+  worked.
+- **Accuracy**: both players' scores for the whole game and for the opening,
+  middlegame and endgame, and a graph of who was winning when.
+- **Openings**: named from a built-in book.
+- **Longer explanations (optional)**: besides the coach line, ask an AI
+  provider to explain any move. It needs a free key from Groq,
+  Google Gemini, OpenRouter or NVIDIA NIM (no card needed).
+- **Share**: share your games with every move's verdict on them.
+- **Your board**: several board themes and piece sets to customize.
+
+It's free and open source (GPL), with no ads and no daily limit. Your games
+stay on your phone, there's no account, and analysis works offline. Nothing is
+uploaded, except when you ask for a longer explanation: that request goes to
+the AI provider you chose.
 
 ## Building
 
@@ -47,9 +44,6 @@ flutter run --release --dart-define=SHOW_LOGS=true
 ```
 
 Debug builds (`flutter run`) always have it.
-
-Written explanations need an API key, added in Settings; none is stored in
-the repo.
 
 ## Privacy
 

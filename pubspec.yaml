@@ -1,7 +1,7 @@
 name: chess_mortem
-description: "Free, private chess game analysis on your phone: Stockfish verdicts, plain-English coach lines, and what-if moves."
+description: "A free chess analyzer for your games. Every move rated and explained in plain English, on your device."
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: ^3.11.1

@@ -279,8 +279,8 @@ class _BoardScreenState extends State<BoardScreen> {
       builder: (context) => AlertDialog(
         title: const Text('No API key'),
         content: const Text(
-          'Explanations are written by an AI model, with a key of your own. '
-          'A free one takes a minute — Settings shows how.',
+          'Detailed explanations come from an AI model. Set up a free key. '
+          'Settings shows you how.',
         ),
         actions: [
           TextButton(
@@ -903,7 +903,7 @@ class _NavigationRow extends StatelessWidget {
     final status = session.explanationStatus(node);
     final nextKeyMove = session.nextKeyMove;
     final previousKeyMove = session.previousKeyMove;
-    final mine = session.reviewsOneSide ? 'your ' : '';
+    final mine = session.reviewsOneSide;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -913,7 +913,7 @@ class _NavigationRow extends StatelessWidget {
             icon: const Icon(Icons.keyboard_double_arrow_left),
             iconSize: _iconSize,
             padding: _padding,
-            tooltip: 'Previous ${mine}key move',
+            tooltip: mine ? 'Your previous key move' : 'Previous key move',
             onPressed: previousKeyMove == null
                 ? null
                 : () {
@@ -952,7 +952,7 @@ class _NavigationRow extends StatelessWidget {
             icon: const Icon(Icons.keyboard_double_arrow_right),
             iconSize: _iconSize,
             padding: _padding,
-            tooltip: 'Next ${mine}key move',
+            tooltip: mine ? 'Your next key move' : 'Next key move',
             onPressed: nextKeyMove == null
                 ? null
                 : () {

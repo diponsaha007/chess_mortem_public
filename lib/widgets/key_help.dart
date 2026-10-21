@@ -13,6 +13,10 @@ typedef LinkLauncher = Future<bool> Function(Uri url);
 Future<bool> launchInBrowser(Uri url) =>
     launchUrl(url, mode: LaunchMode.externalApplication);
 
+/// A page to read without leaving the app: a browser tab over it.
+Future<bool> launchInApp(Uri url) =>
+    launchUrl(url, mode: LaunchMode.inAppBrowserView);
+
 /// Opens [url] in the browser. With no browser to hand it to, the link is
 /// copied instead and the user is told, so the step is never a dead end.
 Future<void> openLink(
@@ -28,7 +32,7 @@ Future<void> openLink(
   }
   await Clipboard.setData(ClipboardData(text: url));
   messenger?.showSnackBar(
-    const SnackBar(content: Text('Link copied — paste it in your browser.')),
+    const SnackBar(content: Text('Link copied. Paste it in your browser.')),
   );
 }
 

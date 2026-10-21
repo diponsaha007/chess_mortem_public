@@ -1036,14 +1036,14 @@ String moveSummaryLine(GameNode node) {
   final classification = node.classification;
   switch (classification) {
     case Classification.brilliant:
-      return 'Gave up material — and it works.';
+      return 'A sacrifice that pays off.';
     case Classification.great:
       return 'The only good move here.';
     case Classification.miss:
       final better = node.betterMoveSan;
       return better == null
           ? "Let the opponent's mistake go."
-          : "Let the opponent's mistake go — $better would have punished it.";
+          : "Let the opponent's mistake go. $better would have punished it.";
     default:
       break;
   }

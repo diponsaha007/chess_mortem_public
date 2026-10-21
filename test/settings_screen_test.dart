@@ -7,11 +7,13 @@ import 'package:chess_mortem/engine/uci_options.dart';
 import 'package:chess_mortem/feedback/move_sounds.dart';
 import 'package:chess_mortem/llm/llm_config.dart';
 import 'package:chess_mortem/llm/llm_config_store.dart';
+import 'package:chess_mortem/platform/share_game.dart';
 import 'package:chess_mortem/screens/settings_screen.dart';
 import 'package:chess_mortem/widgets/appearance_picker.dart';
 import 'package:chess_mortem/widgets/key_help.dart';
 import 'package:chessground/chessground.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,6 +50,8 @@ void main() {
     ValueChanged<int>? onDepth,
     ValueChanged<bool>? onRanksAlternatives,
     LinkLauncher? launchLink,
+    LinkLauncher? launchPage,
+    GameSharer? sharer,
   }) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -67,6 +71,8 @@ void main() {
               onEngineDepthChanged: onDepth,
               onRanksAlternativesChanged: onRanksAlternatives,
               launchLink: launchLink ?? (_) async => true,
+              launchPage: launchPage ?? (_) async => true,
+              sharer: sharer ?? _FakeSharer(hasSheet: true),
             ),
           ),
         ),
@@ -187,28 +193,93 @@ void main() {
     expect(find.byType(LicensePage), findsOneWidget);
   });
 
+  Future<void> tapAbout(WidgetTester tester, Key key) async {
+    await tester.scrollUntilVisible(find.byKey(key), 200);
+    await tester.ensureVisible(find.byKey(key));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('About links to the published source and the privacy policy', (
     tester,
   ) async {
     final opened = <String>[];
+    final read = <String>[];
     await pumpSettings(
       tester,
       launchLink: (url) async {
         opened.add(url.toString());
         return true;
       },
+      launchPage: (url) async {
+        read.add(url.toString());
+        return true;
+      },
     );
 
-    for (final key in [sourceCodeTileKey, privacyPolicyTileKey]) {
-      await tester.scrollUntilVisible(find.byKey(key), 200);
-      await tester.ensureVisible(find.byKey(key));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(key));
-      await tester.pumpAndSettle();
-    }
+    await tapAbout(tester, sourceCodeTileKey);
+    await tapAbout(tester, privacyPolicyTileKey);
 
-    expect(opened, [sourceCodeUrl, privacyPolicyUrl]);
+    expect(opened, [sourceCodeUrl]);
+    expect(read, [privacyPolicyUrl], reason: 'read inside the app');
     expect(privacyPolicyUrl, startsWith(sourceCodeUrl));
+  });
+
+  testWidgets('Rate opens the Play Store app, or the web listing without it', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    var hasStore = true;
+    await pumpSettings(
+      tester,
+      launchLink: (url) async {
+        opened.add(url.toString());
+        return hasStore || url.scheme == 'https';
+      },
+    );
+
+    await tapAbout(tester, rateAppTileKey);
+    expect(opened, [playStoreAppUrl]);
+
+    hasStore = false;
+    opened.clear();
+    await tapAbout(tester, rateAppTileKey);
+    expect(opened, [playStoreAppUrl, playStoreWebUrl]);
+  });
+
+  testWidgets('Share sends the Play link', (tester) async {
+    final sharer = _FakeSharer(hasSheet: true);
+    await pumpSettings(tester, sharer: sharer);
+    await tapAbout(tester, shareAppTileKey);
+    expect(sharer.shared, [shareAppText]);
+    expect(shareAppText, contains(playStoreWebUrl));
+    expect(find.text('Link copied'), findsNothing);
+  });
+
+  testWidgets('Share copies the link where there is no share sheet', (
+    tester,
+  ) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await pumpSettings(tester, sharer: _FakeSharer(hasSheet: false));
+    await tapAbout(tester, shareAppTileKey);
+    expect(copied, shareAppText);
+    expect(find.text('Link copied'), findsOne);
   });
 
   testWidgets('a key carries its own provider and model', (tester) async {
@@ -481,7 +552,7 @@ void main() {
     ) async {
       await pumpSettings(tester);
       expect(
-        find.textContaining('tell when only one move worked'),
+        find.textContaining('Enables Brilliant and Great moves'),
         findsNothing,
         reason: 'the explanation is behind the ⓘ, not printed on the page',
       );
@@ -493,7 +564,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('tell when only one move worked'), findsOne);
+      expect(
+        find.textContaining('Enables Brilliant and Great moves'),
+        findsOne,
+      );
     });
   });
 
@@ -687,4 +761,18 @@ void main() {
 class _BrokenStore extends LlmConfigStore {
   @override
   Future<LlmConfig> load() async => throw Exception('no keystore');
+}
+
+class _FakeSharer extends GameSharer {
+  _FakeSharer({required this.hasSheet});
+
+  final bool hasSheet;
+  final shared = <String>[];
+
+  @override
+  Future<bool> share(String text, {String? subject, String? title}) async {
+    if (!hasSheet) return false;
+    shared.add(text);
+    return true;
+  }
 }

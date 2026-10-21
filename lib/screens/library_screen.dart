@@ -271,8 +271,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             Text('No games yet', style: theme.textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
-              'Paste a PGN from any site you play on and it will be analysed '
-              'here — and kept, so you can come back to it.',
+              'Paste a PGN from any site you play on. It will be saved and '
+              'analysed here.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
@@ -326,8 +326,7 @@ class _NameHint extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Text(
-                'Put your name as it appears in your games. The board then '
-                'opens on your side and reviews your moves only.',
+                'Add your name as it is in your PGNs to review from your side.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSecondaryContainer,
                 ),
@@ -379,7 +378,7 @@ class _PasteDialogState extends State<_PasteDialog> {
     if (added == null) {
       setState(() {
         _submitting = false;
-        _error = 'That PGN could not be read — check it is a whole game.';
+        _error = 'That PGN could not be read.';
       });
       return;
     }

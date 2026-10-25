@@ -1,7 +1,7 @@
 name: chess_mortem
 description: "A free chess analyzer for your games. Every move rated and explained in plain English, on your device."
 publish_to: 'none'
-version: 1.0.0+6
+version: 1.0.0+7
 
 environment:
   sdk: ^3.11.1

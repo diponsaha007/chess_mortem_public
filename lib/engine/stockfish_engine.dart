@@ -203,13 +203,13 @@ class StockfishEngine implements ChessEngine {
       await ready.future.timeout(const Duration(seconds: 10));
       _handshake = null;
     } catch (e) {
-      // Usually an engine from an earlier run still alive in this process
-      // (a hot restart): it holds the native pipes until the app is closed.
+      // Usually a hot restart: the engine from before is still alive in this
+      // process and holds the native pipes until the app is closed.
       AppLog.instance.error(
         'engine',
-        '$name did not start: $e. If the app was hot-restarted or reopened '
-            'without being closed, an engine from before is still running; '
-            'closing the app completely starts a clean one.',
+        '$name did not start: $e. If the app was hot-restarted, the engine '
+            'from before is still running; closing the app completely starts '
+            'a clean one.',
       );
       throw _startError = EngineStartException(e);
     }

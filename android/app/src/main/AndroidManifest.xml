@@ -7,8 +7,8 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- singleTask: a share reaches the running instance via onNewIntent.
-             singleTop would start a second activity whose Dart copy cannot
-             start the native engine, which is one per process. -->
+             Every instance runs on one Flutter engine (MainActivity.kt), so
+             two at once (singleTop) would take it from each other. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

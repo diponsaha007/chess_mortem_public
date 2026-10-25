@@ -80,22 +80,17 @@ const _engineNote = InfoNote(
       'when the app is restarted.',
 );
 
-final _keysNote = InfoNote(
-  title: 'API keys',
+const _keysNote = InfoNote(
+  title: 'Longer explanations (experimental)',
   body:
-      'Free keys, no card needed:\n'
-      '${_freeProviders.map((name) => '• $name').join('\n')}\n\n'
-      'Keys are stored encrypted on this device and sent only to their '
-      'provider.\n\n'
-      'Each free key has a usage limit. Add a few and switch when one runs '
-      'out.',
+      'Longer explanations are written by an AI model, so they need an API '
+      'key from one of the providers listed under Add key. All of them give '
+      'free keys, no card needed.\n\n'
+      'Each free key has a daily limit (NVIDIA\'s is per minute). Add a few '
+      'and switch when one runs out. Keys are stored encrypted on this '
+      'device.\n\n'
+      'Note: depending on the model, an explanation can make things up.',
 );
-
-/// The providers whose free, card-less key was checked.
-final _freeProviders = [
-  for (final provider in LlmProvider.values)
-    if (provider.freeWithoutCard) provider.label,
-];
 
 /// Settings: the board's look, player name, analysis, engine and API keys.
 /// Saves itself on every change.

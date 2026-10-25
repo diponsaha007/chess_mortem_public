@@ -218,18 +218,18 @@ void main() {
     // Medium thinking uses up to ~1100 tokens, so the cap leaves room.
     expect(groq['max_tokens'], 2000);
 
-    final nvidia = await bodyFor(
-      LlmProvider.nvidiaNim,
-      'nvidia/nemotron-3-super-120b-a12b',
-    );
-    expect(nvidia['chat_template_kwargs'], {'enable_thinking': false});
+    for (final preset in LlmProvider.nvidiaNim.presets) {
+      final nvidia = await bodyFor(LlmProvider.nvidiaNim, preset.model);
+      expect(nvidia['chat_template_kwargs'], {
+        'enable_thinking': false,
+      }, reason: preset.model);
+    }
 
     // OpenRouter's own switch: left to think, its free models answer nothing.
-    final openRouter = await bodyFor(
-      LlmProvider.openRouter,
-      LlmProvider.openRouter.defaultModel,
-    );
-    expect(openRouter['reasoning'], {'enabled': false});
+    for (final preset in LlmProvider.openRouter.presets) {
+      final openRouter = await bodyFor(LlmProvider.openRouter, preset.model);
+      expect(openRouter['reasoning'], {'enabled': false}, reason: preset.model);
+    }
     final typedIn = await bodyFor(LlmProvider.openRouter, 'some/other-model');
     expect(typedIn.containsKey('reasoning'), isFalse);
 

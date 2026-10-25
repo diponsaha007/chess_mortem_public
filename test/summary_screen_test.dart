@@ -421,12 +421,12 @@ void main() {
   testWidgets('a row explains itself in a dialog instead of a closing essay', (
     tester,
   ) async {
-    // Each row carries its own ⓘ, so the reader never matches a paragraph's
-    // sentences to rows.
+    // A row that needs explaining carries its own ⓘ, so the reader never
+    // matches a paragraph's sentences to rows.
     await pumpSummary(tester, await loadedSession());
 
     expect(
-      find.textContaining('winning chances each player kept'),
+      find.textContaining('1/100th of a pawn'),
       findsNothing,
       reason: 'the explanation is behind the icon, not printed on the page',
     );
@@ -438,16 +438,10 @@ void main() {
 
     await tester.tap(infoFor('Centipawn loss'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('hundredths of a pawn'), findsOne);
+    expect(find.textContaining('1/100th of a pawn'), findsOne);
 
     await tester.tap(find.text('Got it'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('hundredths of a pawn'), findsNothing);
-
-    // A different figure explains a different thing: the headline accuracy,
-    // which is not in the table, carries its own note.
-    await tester.tap(infoFor('ACCURACY').first);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('winning chances each player kept'), findsOne);
+    expect(find.textContaining('1/100th of a pawn'), findsNothing);
   });
 }

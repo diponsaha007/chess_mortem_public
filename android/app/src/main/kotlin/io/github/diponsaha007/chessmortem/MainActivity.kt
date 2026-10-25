@@ -1,6 +1,7 @@
 package io.github.diponsaha007.chessmortem
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -8,6 +9,7 @@ import android.os.Bundle
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
@@ -16,12 +18,38 @@ import java.io.File
  * text shared from another app, or a .pgn file opened with this one. And the
  * other way: a game shared from the app (`lib/platform/share_game.dart`), as
  * text or as a file from the cache's shared folder.
+ *
+ * Every instance runs on the process's one engine ([provideFlutterEngine]).
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
+    private var shareChannel: MethodChannel? = null
 
     /** What the app was launched with, until Dart asks for it. */
     private var pending: String? = null
+
+    /**
+     * The process's one engine, made on first use and kept in
+     * [FlutterEngineCache], so an activity created later (after Back on the
+     * library, or after the system destroyed this one) reattaches to the same
+     * Dart isolate. A second isolate could never analyse: Stockfish is
+     * native, one per process, and outlives the isolate that started it.
+     * An engine given here is not destroyed with the activity, and onStart
+     * runs main() on it only if it is not running yet.
+     */
+    override fun provideFlutterEngine(context: Context): FlutterEngine {
+        val cache = FlutterEngineCache.getInstance()
+        cache.get(ENGINE_ID)?.let { return it }
+        // The application context: the engine outlives this activity. Its
+        // constructor registers the plugins, which FlutterActivity does only
+        // for an engine it made itself.
+        val engine = FlutterEngine(context.applicationContext, flutterShellArgs.toArray())
+        cache.put(ENGINE_ID, engine)
+        return engine
+    }
+
+    /** A running engine is never handed a saved state over its own. */
+    override fun shouldRestoreAndSaveState(): Boolean = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -35,8 +63,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL)
-            .setMethodCallHandler { call, result ->
+        shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL).also {
+            it.setMethodCallHandler { call, result ->
                 val subject = call.argument<String>("subject")
                 val text = call.argument<String>("text")
                 val path = call.argument<String>("path")
@@ -52,6 +80,20 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        }
+    }
+
+    /**
+     * This activity is going and the engine stays, so its handlers go with
+     * it. Runs before the next activity sets its own, even when that one
+     * arrives first and takes the engine.
+     */
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        channel?.setMethodCallHandler(null)
+        shareChannel?.setMethodCallHandler(null)
+        channel = null
+        shareChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     /** Opens the system share sheet with [text], leaving this app out of it. */
@@ -99,14 +141,26 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Not on a rotation or a restore: the same intent would arrive twice.
-        if (savedInstanceState == null) pending = textOf(intent)
+        if (savedInstanceState != null) return
+        val text = textOf(intent) ?: return
+        // A new engine starts Dart only in onStart, and Dart then asks for
+        // the text. A reused one asked when it started, so it is told.
+        if (flutterEngine?.dartExecutor?.isExecutingDart == true) {
+            deliver(text)
+        } else {
+            pending = text
+        }
     }
 
     /** The app was already open (launchMode singleTask). */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val text = textOf(intent) ?: return
+        deliver(textOf(intent) ?: return)
+    }
+
+    /** Hands [text] to a running Dart. */
+    private fun deliver(text: String) {
         val dart = channel
         if (dart == null) {
             pending = text
@@ -161,6 +215,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val CHANNEL = "chess_mortem/incoming"
         const val SHARE_CHANNEL = "chess_mortem/share"
+        const val ENGINE_ID = "main"
         const val MAX_BYTES = 512 * 1024
     }
 }

@@ -266,7 +266,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       label: phase.label,
       white: pct(white),
       black: pct(black),
-      info: _phaseNote,
     );
   }
 
@@ -279,21 +278,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 }
 
-// What each figure means, behind its ⓘ.
-
-const _accuracyNote = InfoNote(
-  title: 'Accuracy',
-  body: 'How much of their winning chances each player kept.',
-);
-
-const _phaseNote = InfoNote(
-  title: 'Game phases',
-  body: 'Accuracy in each part of the game, scored on its own.',
-);
+// What a figure means, behind its ⓘ.
 
 const _centipawnNote = InfoNote(
   title: 'Centipawn loss',
-  body: 'Average loss per move, in hundredths of a pawn. Lower is better.',
+  body:
+      "Centipawn loss measures how much a chess player's position worsens on "
+      "a specific move compared to the computer engine's best choice. A "
+      "centipawn is equal to 1/100th of a pawn's value (+1.0 equals 100 "
+      "centipawns). The summary shows the average per move; lower is better.",
 );
 
 /// Every figure here is provisional until the sweep ends.
@@ -405,18 +398,13 @@ class _PlayerCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Row(
-          children: [
-            Text(
-              'ACCURACY',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
-                letterSpacing: 0.8,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            InfoDot(_accuracyNote),
-          ],
+        Text(
+          'ACCURACY',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.outline,
+            letterSpacing: 0.8,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         Text(
           accuracy == null ? '—' : '${accuracy!.toStringAsFixed(1)}%',

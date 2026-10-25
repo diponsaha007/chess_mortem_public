@@ -29,17 +29,12 @@ Future<ShareFormat?> showShareFormatSheet(
         ListTile(
           leading: const Icon(Icons.description_outlined),
           title: const Text('PGN'),
-          subtitle: const Text('The moves, as text'),
           onTap: () => Navigator.of(context).pop(ShareFormat.pgn),
         ),
         ListTile(
           leading: const Icon(Icons.gif_box_outlined),
           title: const Text('GIF'),
-          subtitle: Text(
-            gifReady
-                ? 'Every move, with its verdict'
-                : 'After the analysis finishes',
-          ),
+          subtitle: gifReady ? null : const Text('After the analysis finishes'),
           enabled: gifReady,
           onTap: () => Navigator.of(context).pop(ShareFormat.gif),
         ),

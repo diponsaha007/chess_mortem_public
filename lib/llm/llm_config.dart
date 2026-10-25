@@ -58,17 +58,29 @@ enum LlmProvider {
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     presets: [
-      // A free model, so a key without credits works. Left to think, the
-      // free models spend the whole token cap and answer nothing.
+      // Free models, so a key without credits works. Left to think, the
+      // free models spend the whole token cap and answer nothing. Both are
+      // served by NVIDIA; Nano Omni there is often at its request limit.
       LlmPreset(
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
-        label: 'Nemotron Super 120B (free)',
+        model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        label: 'Nemotron Ultra 550B (free)',
+        extras: {
+          'reasoning': {'enabled': false},
+        },
+      ),
+      LlmPreset(
+        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+        label: 'Nemotron Nano Omni 30B (free)',
         extras: {
           'reasoning': {'enabled': false},
         },
       ),
     ],
-    formerDefaults: ['qwen/qwen3.6-27b'],
+    formerDefaults: [
+      'qwen/qwen3.6-27b',
+      'nvidia/nemotron-3-super-120b-a12b:free',
+      'minimax/minimax-m3.1-flash:free',
+    ],
     keyPageUrl: 'https://openrouter.ai/keys',
     freeWithoutCard: true,
   ),
@@ -76,16 +88,28 @@ enum LlmProvider {
     label: 'NVIDIA NIM',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     presets: [
-      // Thinking made it nine times slower and no more accurate.
+      // Short and quick (3.5 s at worst). Thinking made it slower than the
+      // timeout and no more accurate, as for Ultra.
       LlmPreset(
-        model: 'nvidia/nemotron-3-super-120b-a12b',
-        label: 'Nemotron Super 120B',
+        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+        label: 'Nemotron Nano Omni 30B',
+        extras: {
+          'chat_template_kwargs': {'enable_thinking': false},
+        },
+      ),
+      // A few more real reasons, at about twice the words.
+      LlmPreset(
+        model: 'nvidia/nemotron-3-ultra-550b-a55b',
+        label: 'Nemotron Ultra 550B',
         extras: {
           'chat_template_kwargs': {'enable_thinking': false},
         },
       ),
     ],
-    formerDefaults: ['nvidia/nemotron-3.5-lightning-30b-a3b'],
+    formerDefaults: [
+      'nvidia/nemotron-3.5-lightning-30b-a3b',
+      'nvidia/nemotron-3-super-120b-a12b',
+    ],
     keyPageUrl: 'https://build.nvidia.com/settings/api-keys',
     freeWithoutCard: true,
   );

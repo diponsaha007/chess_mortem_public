@@ -3,6 +3,13 @@
 Chess Mortem is a free chess analyzer for your games. Share a game from any
 app and get analysis in plain English, run locally on your device.
 
+To start, open a finished game in your chess app, share its PGN and pick
+Chess Mortem. You can also paste a PGN into the app.
+
+[![Play the Chess Mortem video on YouTube](.github/video.jpg)](https://www.youtube.com/watch?v=FJtI7Jvc46U)
+
+▶ [Watch the video on YouTube](https://www.youtube.com/watch?v=FJtI7Jvc46U)
+
 ## What you get
 
 - **Coach line**: one line per move on what happened: the tactic you fell
@@ -14,6 +21,9 @@ app and get analysis in plain English, run locally on your device.
   Stockfish 18 is an optional download for stronger analysis.
 - **Better moves**: on every mistake, blunder or miss, see the move you should
   have played, why, and its line.
+- **Key moves**: buttons that jump to the moves that decided the game:
+  mistakes, blunders and misses, and Brilliant and Great moves. Once you set
+  your name, they stop on your moves only.
 - **What if**: try any move in any position and see whether it would have
   worked.
 - **Accuracy**: both players' scores for the whole game and for the opening,

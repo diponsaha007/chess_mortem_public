@@ -48,6 +48,9 @@ app.*.map.json
 .tools/
 __pycache__/
 
+# Launch-video renders
+brag-output*/
+
 /docs/
 /dataset/
 /tool/

@@ -90,6 +90,40 @@ void main() {
       expect(node.isUserMove, isFalse); // the original node is kept
     });
 
+    test('castling by the king two squares is the same edge as '
+        'king-takes-rook', () {
+      final tree = GameTree.empty();
+      var node = tree.root;
+      for (final san in ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5']) {
+        node = tree.addMove(node, node.position.parseSan(san)!);
+      }
+      final fromEngine = tree.addMove(node, Move.parse('e1h1')!);
+      final fromBoard = tree.addMove(
+        node,
+        Move.parse('e1g1')!,
+        isUserMove: true,
+      );
+
+      expect(identical(fromBoard, fromEngine), isTrue);
+      expect(node.children, hasLength(1));
+      expect(fromBoard.move!.uci, 'e1h1');
+      expect(fromBoard.san, 'O-O');
+    });
+
+    test('castling first played by the king two squares is stored '
+        'king-takes-rook', () {
+      final tree = GameTree.empty();
+      var node = tree.root;
+      for (final san in ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5']) {
+        node = tree.addMove(node, node.position.parseSan(san)!);
+      }
+      node.eval = const EngineEval(cp: 30, bestMoveUci: 'e1h1', depth: 15);
+      final castled = tree.addMove(node, Move.parse('e1g1')!);
+
+      expect(castled.move!.uci, 'e1h1');
+      expect(castled.isEngineMove, isTrue);
+    });
+
     test('rejects illegal moves', () {
       final tree = GameTree.empty();
       expect(

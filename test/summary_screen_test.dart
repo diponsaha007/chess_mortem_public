@@ -444,4 +444,82 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('1/100th of a pawn'), findsNothing);
   });
+
+  testWidgets('a count opens that side\'s move of the tier, then the next', (
+    tester,
+  ) async {
+    final session = await loadedSession();
+    final mainline = session.tree.mainline; // e4 e5 Nf3 Nc6 Bb5 a6
+    for (final node in mainline) {
+      node.openingName = null;
+      node.classification = Classification.good;
+    }
+    mainline[0].classification = Classification.brilliant;
+    mainline[3].classification = Classification.brilliant; // Black's
+    mainline[4].classification = Classification.brilliant;
+    await pumpSummary(tester, session);
+
+    final row = find
+        .ancestor(of: find.text('Brilliant'), matching: find.byType(Row))
+        .last;
+    // White's two, Black's one.
+    await tester.tap(find.descendant(of: row, matching: find.text('2')));
+    await tester.pumpAndSettle();
+    expect(session.current, mainline[0]);
+    await tester.tap(find.descendant(of: row, matching: find.text('2')));
+    await tester.pumpAndSettle();
+    expect(session.current, mainline[4]);
+    await tester.tap(find.descendant(of: row, matching: find.text('1')));
+    await tester.pumpAndSettle();
+    expect(session.current, mainline[3]);
+
+    // A zero has nothing to open.
+    final greatRow = find
+        .ancestor(of: find.text('Great'), matching: find.byType(Row))
+        .last;
+    expect(
+      find.descendant(of: greatRow, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('opening a move from a count goes back to the board', (
+    tester,
+  ) async {
+    final session = await loadedSession();
+    for (final node in session.tree.mainline) {
+      node.openingName = null;
+      node.classification = Classification.good;
+    }
+    session.tree.mainline[1].classification = Classification.blunder;
+    tester.view.physicalSize = const Size(400, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    SummaryScreen(session: session, perspective: Side.white),
+              ),
+            ),
+            child: const Text('board'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('board'));
+    await tester.pumpAndSettle();
+
+    final row = find
+        .ancestor(of: find.text('Blunder'), matching: find.byType(Row))
+        .last;
+    await tester.tap(find.descendant(of: row, matching: find.text('1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SummaryScreen), findsNothing);
+    expect(session.current, session.tree.mainline[1]);
+  });
 }

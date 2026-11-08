@@ -260,4 +260,84 @@ void main() {
       expect(coachLine(tree.root), 'Starting position.');
     });
   });
+
+  group('Show', () {
+    final node = _move(
+      classification: Classification.mistake,
+      cpAfter: -80,
+      bestBefore: 'd2d4',
+    );
+    const line = 'This lets White win a pawn.';
+
+    Future<void> pumpBar(
+      WidgetTester tester,
+      CoachBar bar, {
+      double width = 360,
+      double scale = 1.0,
+    }) async {
+      final size = Size(width, 740);
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: Scaffold(
+              body: Align(alignment: Alignment.bottomCenter, child: bar),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('takes the hints\' place', (tester) async {
+      await pumpBar(
+        tester,
+        CoachBar(node: node, line: line, onTap: () {}, onShow: () {}),
+      );
+      expect(find.text('Show'), findsOneWidget);
+      expect(find.textContaining('Best:'), findsNothing);
+      expect(find.textContaining('Reply:'), findsNothing);
+    });
+
+    testWidgets('without it, the hints stay', (tester) async {
+      await pumpBar(tester, CoachBar(node: node, line: line, onTap: () {}));
+      expect(find.text('Show'), findsNothing);
+      expect(find.textContaining('Best:'), findsOneWidget);
+    });
+
+    // A large system font, and the landscape column.
+    for (final (width, scale) in [(360.0, 1.3), (296.0, 1.0), (320.0, 1.3)]) {
+      testWidgets('every state fits at ${width}dp, text x$scale', (
+        tester,
+      ) async {
+        for (final show in [
+          null,
+          const ShowProgress(reached: 1, moves: 3, playing: true),
+          const ShowProgress(reached: 3, moves: 3, playing: false),
+        ]) {
+          await pumpBar(
+            tester,
+            CoachBar(
+              node: node,
+              line: line,
+              onTap: () {},
+              onShow: () {},
+              show: show,
+              onStop: () {},
+              onBack: () {},
+              onReplay: () {},
+            ),
+            width: width,
+            scale: scale,
+          );
+          expect(tester.takeException(), isNull, reason: '$show');
+        }
+      });
+    }
+  });
 }

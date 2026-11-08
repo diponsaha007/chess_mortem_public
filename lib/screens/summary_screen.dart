@@ -9,6 +9,8 @@ import '../model/game_result.dart';
 import '../model/game_tree.dart';
 import '../model/sides.dart';
 import '../model/win_chart.dart';
+import '../feedback/haptics.dart';
+import '../feedback/move_sounds.dart';
 import '../widgets/info_note.dart';
 import '../widgets/move_list.dart'
     show BookBadge, ClassificationBadge, classificationColor;
@@ -147,7 +149,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 10),
           _Card(
             title: 'Move quality',
-            child: _MoveQuality(counts: counts, bookMoves: bookMoves),
+            child: _MoveQuality(
+              counts: counts,
+              bookMoves: bookMoves,
+              onOpen: _openMove,
+            ),
           ),
           const SizedBox(height: 10),
           _Card(
@@ -267,6 +273,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
       white: pct(white),
       black: pct(black),
     );
+  }
+
+  /// A count was tapped: back to the board, on the next of those moves
+  /// after the one it shows, round to the first after the last.
+  void _openMove(Side side, bool Function(GameNode) matches) {
+    final target = session.nextMoveOf(side, matches);
+    if (target == null) return;
+    Haptics.step();
+    session.goToNode(target);
+    MoveSoundsScope.read(context)?.play(target);
+    Navigator.of(context).maybePop();
   }
 
   void _goToPly(int ply) {
@@ -631,18 +648,46 @@ class _ChartWithAxis extends StatelessWidget {
 }
 
 /// Move counts for every tier, zeros included, with Book directly under
-/// Great. Book is not a [Classification], so it is added by hand.
+/// Great. Book is not a [Classification], so it is added by hand. A count
+/// above zero is a button to that side's moves of the tier ([onOpen]).
 class _MoveQuality extends StatelessWidget {
-  const _MoveQuality({required this.counts, required this.bookMoves});
+  const _MoveQuality({
+    required this.counts,
+    required this.bookMoves,
+    required this.onOpen,
+  });
 
   final Map<Side, Map<Classification, int>> counts;
   final Map<Side, int> bookMoves;
+  final void Function(Side side, bool Function(GameNode) matches) onOpen;
 
   static const _bookSitsAbove = Classification.best;
 
   @override
   Widget build(BuildContext context) {
     int count(Side side, Classification tier) => counts[side]![tier] ?? 0;
+
+    // The same moves the counts count: book moves only in the Book row.
+    Widget cell(
+      Side side,
+      int n,
+      String what,
+      bool Function(GameNode) matches,
+    ) => _CountCell(
+      count: n,
+      semanticsLabel: '${sideName(side)}: $n $what',
+      onTap: () => onOpen(side, matches),
+    );
+
+    Widget bookCell(Side side) =>
+        cell(side, bookMoves[side]!, 'book', (n) => n.isBook);
+
+    Widget tierCell(Side side, Classification tier) => cell(
+      side,
+      count(side, tier),
+      tier.label,
+      (n) => !n.isBook && n.classification == tier,
+    );
 
     return Column(
       children: [
@@ -652,17 +697,51 @@ class _MoveQuality extends StatelessWidget {
             _SummaryRow(
               leading: const BookBadge(),
               label: 'Book',
-              white: '${bookMoves[Side.white]}',
-              black: '${bookMoves[Side.black]}',
+              whiteCell: bookCell(Side.white),
+              blackCell: bookCell(Side.black),
             ),
           _SummaryRow(
             leading: ClassificationBadge(classification: tier, size: 16),
             label: tier.label,
-            white: '${count(Side.white, tier)}',
-            black: '${count(Side.black, tier)}',
+            whiteCell: tierCell(Side.white, tier),
+            blackCell: tierCell(Side.black, tier),
           ),
         ],
       ],
+    );
+  }
+}
+
+/// One count in the quality table, plain text like every other figure.
+/// Above zero it can be tapped: only the ripple shows it.
+class _CountCell extends StatelessWidget {
+  const _CountCell({
+    required this.count,
+    required this.semanticsLabel,
+    required this.onTap,
+  });
+
+  final int count;
+  final String semanticsLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text('$count', textAlign: TextAlign.center);
+    if (count == 0) return text;
+    // Transparent Material: the card's own background would hide the ripple.
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: text,
+        ),
+      ),
     );
   }
 }
@@ -700,8 +779,10 @@ class _SummaryRow extends StatelessWidget {
   const _SummaryRow({
     this.leading,
     required this.label,
-    required this.white,
-    required this.black,
+    this.white = '',
+    this.black = '',
+    this.whiteCell,
+    this.blackCell,
     this.info,
   });
 
@@ -709,6 +790,10 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final String white;
   final String black;
+
+  /// In place of [white] / [black], for a column that is more than text.
+  final Widget? whiteCell;
+  final Widget? blackCell;
 
   /// Shown as a tappable ⓘ beside the label.
   final InfoNote? info;
@@ -741,8 +826,12 @@ class _SummaryRow extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(child: Text(white, textAlign: TextAlign.center)),
-          Expanded(child: Text(black, textAlign: TextAlign.center)),
+          Expanded(
+            child: whiteCell ?? Text(white, textAlign: TextAlign.center),
+          ),
+          Expanded(
+            child: blackCell ?? Text(black, textAlign: TextAlign.center),
+          ),
         ],
       ),
     );

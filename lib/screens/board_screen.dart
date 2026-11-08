@@ -90,6 +90,38 @@ class _Debounced {
   }
 }
 
+/// A line Show plays (`AnalysisSession.addShowLine`), kept while the cursor
+/// stays where the playback put it.
+class _Show {
+  _Show(this.origin, this.frames, {required this.lead});
+
+  /// The move whose coach line is shown.
+  final GameNode origin;
+
+  /// The positions stepped through: the line's, after the position before
+  /// the move when [lead] (a better line starts there).
+  final List<GameNode> frames;
+  final bool lead;
+
+  /// How many of [frames] the cursor has reached.
+  int reached = 0;
+  bool playing = true;
+  Timer? timer;
+
+  /// Where the playback last put the cursor: anywhere else, the user moved.
+  late GameNode at = origin;
+
+  ShowProgress get progress => ShowProgress(
+    reached: math.max(0, reached - (lead ? 1 : 0)),
+    moves: frames.length - (lead ? 1 : 0),
+    playing: playing,
+  );
+}
+
+/// The pause before the first move of a show, and between moves.
+const _showFirstStep = Duration(milliseconds: 400);
+const _showStep = Duration(milliseconds: 800);
+
 class _BoardScreenState extends State<BoardScreen> {
   late final ChessboardController _boardController;
 
@@ -117,6 +149,11 @@ class _BoardScreenState extends State<BoardScreen> {
   /// The face above the board, shown with the buzz while the cursor stays.
   String? _emoji;
 
+  /// The line Show is playing or has played; null outside a show.
+  _Show? _show;
+
+  bool get _showPlaying => _show?.playing ?? false;
+
   AnalysisSession get session => widget.session;
 
   @override
@@ -131,6 +168,7 @@ class _BoardScreenState extends State<BoardScreen> {
 
   @override
   void dispose() {
+    _show?.timer?.cancel();
     _betterLine.cancel();
     _reaction.cancel();
     _discardExplainer();
@@ -140,6 +178,8 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   void _onSessionChanged() {
+    // Any step of the user's own ends the show.
+    if (_show != null && !identical(session.current, _show!.at)) _endShow();
     _faceTheUser();
     _scheduleBetterLine();
     _scheduleReaction();
@@ -199,7 +239,7 @@ class _BoardScreenState extends State<BoardScreen> {
   /// while the board follows the sweep: the branch would queue engine
   /// searches for every mistake it passes.
   void _scheduleBetterLine() {
-    if (session.followsSweep) {
+    if (session.followsSweep || _showPlaying) {
       _betterLine.cancel();
       return;
     }
@@ -219,7 +259,7 @@ class _BoardScreenState extends State<BoardScreen> {
       _reactedHere = false;
       if (_emoji != null) setState(() => _emoji = null);
     }
-    if (session.followsSweep) {
+    if (session.followsSweep || _showPlaying) {
       _reaction.cancel();
       _reactedHere = true;
       return;
@@ -240,6 +280,72 @@ class _BoardScreenState extends State<BoardScreen> {
     _reactedHere = true;
     Haptics.react(reaction);
     setState(() => _emoji = reactionEmoji(reaction));
+  }
+
+  /// Plays [origin]'s show line out on the board, one move at a time, as a
+  /// variation the user can walk afterwards.
+  void _startShow(GameNode origin) {
+    _endShow();
+    if (!identical(session.current, origin)) session.goToNode(origin);
+    final line = session.addShowLine(origin);
+    if (line.isEmpty || !mounted) return;
+    final lead = identical(line.first.parent, origin) ? null : origin.parent;
+    setState(() {
+      _show = _Show(origin, [?lead, ...line], lead: lead != null);
+    });
+    _show!.timer = Timer(_showFirstStep, _stepShow);
+  }
+
+  void _stepShow() {
+    final show = _show;
+    if (show == null || !mounted) return;
+    final next = show.frames[show.reached];
+    show.reached++;
+    // Ended before the cursor lands, so the last position may buzz.
+    show.playing = show.reached < show.frames.length;
+    show.at = next;
+    session.goToNode(next);
+    _playSound();
+    if (show.playing) show.timer = Timer(_showStep, _stepShow);
+  }
+
+  /// Leaves the cursor where the show got to.
+  void _stopShow() {
+    final show = _show;
+    if (show == null || !show.playing) return;
+    show.timer?.cancel();
+    setState(() => show.playing = false);
+  }
+
+  /// Back to the move whose line was shown.
+  void _leaveShow() {
+    final origin = _show?.origin;
+    _endShow();
+    if (origin == null) return;
+    session.goToNode(origin);
+    _playSound();
+  }
+
+  void _replayShow() {
+    final show = _show;
+    if (show == null) return;
+    show.timer?.cancel();
+    setState(() {
+      show
+        ..reached = 0
+        ..playing = true
+        ..at = show.origin;
+    });
+    session.goToNode(show.origin);
+    show.timer = Timer(_showFirstStep, _stepShow);
+  }
+
+  void _endShow() {
+    final show = _show;
+    if (show == null) return;
+    show.timer?.cancel();
+    _show = null;
+    if (mounted) setState(() {});
   }
 
   /// Asks the LLM to expand on [node]'s coach line, offering Settings when
@@ -316,6 +422,7 @@ class _BoardScreenState extends State<BoardScreen> {
     if (!session.canExplain(node)) return;
     // The board stays on the move the sheet is about.
     session.stopFollowing();
+    _stopShow();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -333,6 +440,12 @@ class _BoardScreenState extends State<BoardScreen> {
           errorDetail: session.explanationError(node),
           betterLine: _betterLineText(node),
           onRetry: () => _explainMore(node),
+          onShow: session.showLineFor(node) == null
+              ? null
+              : () {
+                  Navigator.pop(context);
+                  _startShow(node);
+                },
         ),
       ),
     );
@@ -560,11 +673,25 @@ class _BoardScreenState extends State<BoardScreen> {
         _playSound();
       },
     );
-    final coach = CoachBar(
-      node: node,
-      line: session.coachLineFor(node),
-      onTap: _showExplanation,
-    );
+    final show = _show;
+    final coach = show == null
+        ? CoachBar(
+            node: node,
+            line: session.coachLineFor(node),
+            onTap: _showExplanation,
+            onShow: session.showLineFor(node) == null
+                ? null
+                : () => _startShow(node),
+          )
+        : CoachBar(
+            node: show.origin,
+            line: session.coachLineFor(show.origin),
+            onTap: null,
+            show: show.progress,
+            onStop: _stopShow,
+            onBack: _leaveShow,
+            onReplay: _replayShow,
+          );
 
     // Landscape puts the moves beside the board.
     final isWide = constraints.maxWidth > constraints.maxHeight;

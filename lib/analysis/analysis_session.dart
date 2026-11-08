@@ -12,6 +12,7 @@ import '../model/analysis_codec.dart';
 import '../model/classification.dart';
 import '../model/coach_flavor.dart' show CoachReaction;
 import '../model/coach_line.dart';
+import '../model/concepts/show_line.dart';
 import '../model/eval.dart';
 import '../model/game_phase.dart';
 import '../model/game_result.dart';
@@ -438,6 +439,54 @@ class AnalysisSession extends ChangeNotifier {
     _saveIfChanged();
   }
 
+  /// The line the coach line's Show button plays for [node], or null where
+  /// its line names nothing a line can show.
+  ShowLine? showLineFor(GameNode node) =>
+      showLineForNode(node, phase: _phaseOf(node));
+
+  /// Adds [node]'s show line ([showLineFor]) to the tree as a variation, from
+  /// [node] or, for the better line, from its parent, and returns its
+  /// positions in order: empty when there is none. Moves already in the
+  /// tree are reused, so a line the game itself played walks the mainline.
+  /// The new positions are searched in the background, as a better line's
+  /// are; the board plays them without waiting.
+  List<GameNode> addShowLine(GameNode node) {
+    final show = showLineFor(node);
+    final from = show == null
+        ? null
+        : show.fromParent
+        ? node.parent
+        : node;
+    if (show == null || from == null) return const [];
+    var cursor = from;
+    final added = <GameNode>[];
+    for (final uci in show.uci) {
+      final move = Move.parse(uci);
+      if (move == null || !cursor.position.isLegal(move)) break;
+      cursor = tree.addMove(cursor, move);
+      added.add(cursor);
+    }
+    if (added.isEmpty) return const [];
+    _followingSweep = false;
+    notifyListeners();
+    unawaited(_evaluateLine(added));
+    return added;
+  }
+
+  /// Searches [line]'s positions in order and classifies them, then saves.
+  Future<void> _evaluateLine(List<GameNode> line) async {
+    final generation = _generation;
+    for (final node in line) {
+      if (node.eval != null) continue;
+      await _evaluate(node);
+      if (generation != _generation) return;
+      // The engine's own moves: no runner-up search for them.
+      _classifyFromParent(node);
+      notifyListeners();
+    }
+    _saveIfChanged();
+  }
+
   /// Classifies [node], first searching its parent's runner-up when the
   /// verdict could be promoted. Once per parent.
   Future<void> _classify(GameNode node) async {
@@ -507,6 +556,29 @@ class AnalysisSession extends ChangeNotifier {
   /// Follows `children[0]`.
   void goForward() {
     if (canGoForward) goToNode(current.children.first);
+  }
+
+  /// The next mainline move [side] played that [matches], after the cursor
+  /// (from where a variation branched off), wrapping round to the first. On
+  /// the only one, that is the move the cursor is on. So tapping the same
+  /// summary count again walks through its moves.
+  GameNode? nextMoveOf(Side side, bool Function(GameNode) matches) {
+    final mainline = tree.mainline;
+    final moves = [
+      for (final node in mainline)
+        if (node.sideThatMoved == side && matches(node)) node,
+    ];
+    if (moves.isEmpty) return null;
+
+    final onMainline = Set<GameNode>.identity()..addAll(mainline);
+    var anchor = current;
+    while (!anchor.isRoot && !onMainline.contains(anchor)) {
+      anchor = anchor.parent!;
+    }
+    return moves.firstWhere(
+      (node) => node.ply > anchor.ply,
+      orElse: () => moves.first,
+    );
   }
 
   // ---- Key-move review ----

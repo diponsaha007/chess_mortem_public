@@ -9,6 +9,8 @@
 /// are tested for a motif.
 library;
 
+import 'dart:math' show max;
+
 import 'package:dartchess/dartchess.dart';
 
 import 'exchange.dart';
@@ -49,6 +51,7 @@ class LineReading {
     this.gave = const [],
     this.hung,
     this.pays = false,
+    this.plies = 0,
   });
 
   static const none = LineReading();
@@ -70,6 +73,11 @@ class LineReading {
   /// The line mates, or wins enough to be worth saying. Without it [won] and
   /// [gave] are only what the line happened to count.
   final bool pays;
+
+  /// How many plies of the line, from its start, it takes to make its point:
+  /// the mate, or the first settled position where material already stands
+  /// as [won] and [gave] say. 0 when the line changes nothing.
+  final int plies;
 
   int get gain => _gainOf((won, gave));
 
@@ -145,9 +153,16 @@ const double evalSlack = 1.5;
 LineReading readLine({required Position start, required List<String> pvUci}) {
   final line = _Line.replay(start, pvUci, maxLinePlies);
   if (line.plies.isEmpty) return LineReading.none;
-  final end = _checkpoints(line).lastOrNull?.$2;
-  final (won, gave) = _roleDiff(start.board, end, line.pov);
-  return _reading(line, won, gave, null, null);
+  final (end, board) = _checkpoints(line).last;
+  final (won, gave) = _roleDiff(start.board, board, line.pov);
+  return _reading(
+    line,
+    won,
+    gave,
+    null,
+    null,
+    plies: _madeBy(line, end, line.pov),
+  );
 }
 
 /// Both lines around [played] in [before], each measured from [before] so a
@@ -203,6 +218,8 @@ MoveTags tagMove({
     played,
     before,
     minGain: minGain,
+    // Counted from the position after the move, as [refutation] is.
+    plies: max(0, _madeBy(playedLine, playedPlies, mover.opposite) - 1),
   );
   final ledger = _ledger(playedLine, playedPlies, before.board);
 
@@ -234,6 +251,7 @@ MoveTags tagMove({
       previous,
       beforePrevious,
       minGain: minGain,
+      plies: _madeBy(betterLine, betterPlies, mover),
     ),
     ledger: ledger,
   );
@@ -248,10 +266,11 @@ LineReading _reading(
   Move? setup,
   Position? beforeSetup, {
   int minGain = sacrificeThreshold,
+  int plies = 0,
 }) {
   final mate = line.plies.isNotEmpty && _endsInMate(line);
   final pays = mate || _gainOf((won, gave)) >= minGain;
-  if (!pays) return LineReading(won: won, gave: gave);
+  if (!pays) return LineReading(won: won, gave: gave, plies: plies);
 
   final hung = line.plies.isEmpty
       ? null
@@ -271,6 +290,7 @@ LineReading _reading(
     gave: gave,
     hung: hung,
     pays: true,
+    plies: mate ? line.plies.length : plies,
   );
 }
 
@@ -407,6 +427,23 @@ int _voluntaryLoss(_Line line, Side giver) {
   }
   return chosen;
 }
+
+/// The fewest plies of [line] after which [pov]'s material, counted from
+/// its start, already stands as it does after [end] plies: the settled
+/// position where the gain was made. Nothing to wait for after that.
+int _madeBy(_Line line, int end, Side pov) {
+  final checkpoints = _checkpoints(line, upTo: end);
+  final start = line.start.board;
+  final (won, gave) = _roleDiff(start, checkpoints.last.$2, pov);
+  for (final (plies, board) in checkpoints) {
+    final (w, g) = _roleDiff(start, board, pov);
+    if (_sameRoles(w, won) && _sameRoles(g, gave)) return plies;
+  }
+  return end;
+}
+
+bool _sameRoles(List<Role> a, List<Role> b) =>
+    a.length == b.length && a.indexed.every((e) => b[e.$1] == e.$2);
 
 /// What [pov] is up by on [to] compared with [from], role for role, most
 /// valuable first: roles the opponent has fewer of are won, roles [pov] has

@@ -16,6 +16,7 @@ class ExplanationSheet extends StatelessWidget {
     required this.summaryLine,
     this.explainedBy,
     this.betterLine,
+    this.onShow,
   });
 
   /// e.g. "White played Nxe5 · Blunder".
@@ -36,6 +37,10 @@ class ExplanationSheet extends StatelessWidget {
 
   /// "9. Nf3 Nc6 10. d4 exd4": the better line, for a mistake or worse.
   final String? betterLine;
+
+  /// Closes the sheet and plays [summaryLine]'s point out on the board;
+  /// null where it names nothing a line can show.
+  final VoidCallback? onShow;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +68,14 @@ class ExplanationSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(summaryLine, style: theme.textTheme.titleMedium),
+            if (onShow != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onShow,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Show on board'),
+              ),
+            ],
             const SizedBox(height: 16),
             // An answer stays while it is asked again, and if that fails.
             if (explanation != null && status != ExplanationStatus.idle) ...[

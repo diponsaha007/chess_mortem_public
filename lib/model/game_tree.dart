@@ -200,8 +200,12 @@ class GameTree {
   }
 
   /// Adds [move] under [from], or returns the existing child for that edge.
-  /// The dedupe keeps a revisited position's cached eval.
-  GameNode addMove(GameNode from, Move move, {bool isUserMove = false}) {
+  /// The dedupe keeps a revisited position's cached eval. Castling is stored
+  /// king-takes-rook (`e1h1`), as the PGN and engine lines write it.
+  GameNode addMove(GameNode from, Move played, {bool isUserMove = false}) {
+    final move = played is NormalMove
+        ? from.position.normalizeMove(played)
+        : played;
     final existing = from.childByMove(move);
     if (existing != null) return existing;
 

@@ -41,6 +41,45 @@ List<GameNode> _walkKeyMoves(AnalysisSession session) {
 void main() {
   group('AnalysisSession', () {
     test(
+      'nextMoveOf goes to the next match after the cursor, round and round',
+      () async {
+        final session = AnalysisSession(engine: FakeEngine());
+        await session.loadPgn(_pgnLong);
+        final mainline = session.tree.mainline; // e4 e5 Nf3 Nc6 Bb5 a6
+        for (final node in mainline) {
+          node.classification = Classification.good;
+        }
+        mainline[0].classification = Classification.blunder;
+        mainline[1].classification = Classification.blunder; // Black's
+        mainline[4].classification = Classification.blunder;
+        bool blunder(GameNode n) => n.classification == Classification.blunder;
+
+        // From the start: the first.
+        expect(session.nextMoveOf(Side.white, blunder), mainline[0]);
+        // Between them: the next one, not the first.
+        session.goToNode(mainline[2]);
+        expect(session.nextMoveOf(Side.white, blunder), mainline[4]);
+        // On one: the next, never itself; past the last, round to the first.
+        session.goToNode(mainline[0]);
+        expect(session.nextMoveOf(Side.white, blunder), mainline[4]);
+        session.goToNode(mainline[4]);
+        expect(session.nextMoveOf(Side.white, blunder), mainline[0]);
+        session.goToNode(mainline[5]);
+        expect(session.nextMoveOf(Side.white, blunder), mainline[0]);
+        // The only one: the cursor stays on it.
+        session.goToNode(mainline[1]);
+        expect(session.nextMoveOf(Side.black, blunder), mainline[1]);
+        expect(
+          session.nextMoveOf(
+            Side.black,
+            (n) => n.classification == Classification.brilliant,
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
       'loadPgn evaluates root + each mainline position exactly once',
       () async {
         final engine = FakeEngine();
